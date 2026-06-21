@@ -10,9 +10,8 @@
 
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { getSession } from '../session.js';
-import { getSuiBalance, getUsdcBalance } from '../sui.js';
+import { DUSDC_TYPE, getCoinBalance } from '../sui.js';
 import type { BalanceResponse } from '../types.js';
 
 const router = Router();
@@ -28,23 +27,19 @@ router.get('/:sid', async (req: Request, res: Response) => {
   }
 
   try {
-    const keypair = Ed25519Keypair.fromSecretKey(
-      Buffer.from(session.keypairSecretKey, 'base64'),
-    );
-    const ephemeralAddress = keypair.getPublicKey().toSuiAddress();
-
-    const [suiRaw, usdcRaw] = await Promise.all([
-      getSuiBalance(ephemeralAddress),
-      getUsdcBalance(ephemeralAddress),
+    const [suiRaw, dusdcRaw] = await Promise.all([
+      getCoinBalance(session.ephemeralAddress, '0x2::sui::SUI'),
+      getCoinBalance(session.ephemeralAddress, DUSDC_TYPE),
     ]);
 
     // Convert from MIST (9 decimals) to SUI, and from USDC base units (6 decimals)
     const suiAmount = (Number(suiRaw) / 1e9).toFixed(4);
-    const usdcAmount = (Number(usdcRaw) / 1e6).toFixed(2);
+    const dusdcAmount = (Number(dusdcRaw) / 1e6).toFixed(2);
 
     const resp: BalanceResponse = {
       sui: suiAmount,
-      usdc: usdcAmount,
+      dusdc: dusdcAmount,
+      manager: session.managerId ?? '',
     };
     res.json(resp);
   } catch (err) {

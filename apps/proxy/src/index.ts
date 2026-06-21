@@ -31,7 +31,7 @@ app.use(cors({ origin: '*', methods: ['GET', 'POST', 'DELETE'] }));
 app.use(express.json());
 
 // Parse URL-encoded form data (for 3DS httpc requests)
-// The 3DS sends: sid=abc&action=BUY&qty=1000000000
+// The 3DS sends: sid=abc&action=UP&qty=1000000
 app.use(express.urlencoded({ extended: false }));
 
 // --- Routes ---
@@ -54,8 +54,8 @@ app.get('/', (_req, res) => {
     endpoints: [
       'GET  /health',
       'POST /api/session',
-      'GET  /api/market-data?pool=SUI_USDC',
-      'POST /api/trade (form-encoded: sid, action, qty)',
+      'GET  /api/market-data',
+      'POST /api/trade (form-encoded: sid, action=UP|DOWN, qty)',
       'GET  /api/balance/:sid',
     ],
   });

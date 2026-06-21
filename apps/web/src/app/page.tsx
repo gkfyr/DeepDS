@@ -39,8 +39,8 @@ export default function HomePage() {
   ║  ██████╔╝███████║ ██████╔╝ ║  ASK: 3.2300 SUI
   ║  ╚═════╝ ╚══════╝ ╚═════╝  ║
   ╠══════════════════════════════╣
-  ║  [ BUY ]        [ SELL ]   ║  BOTTOM TOUCH SCREEN
-  ║  qty: 1 SUI     qty: 1 SUI ║
+  ║  [ UP ]         [ DOWN ]   ║  BOTTOM TOUCH SCREEN
+  ║  BTC > strike   BTC < strike║
   ║  [ REFRESH ]  [ SETTINGS ] ║
   ╚══════════════════════════════╝`}
         </pre>
@@ -50,7 +50,7 @@ export default function HomePage() {
             DEEP<span className="text-ds-blue">DS</span>
           </h2>
           <p className="text-green-600 text-sm md:text-base max-w-xl mx-auto leading-relaxed">
-            Trade on <span className="text-ds-green">Sui DeepBook V3</span> using a{' '}
+            Trade <span className="text-ds-green">DeepBook Predict</span> using a{' '}
             <span className="text-ds-blue">Nintendo 3DS</span> as your trading terminal.
             <br />
             Because why use a phone when you have a dual-screen wonder?
@@ -70,7 +70,7 @@ export default function HomePage() {
             '→',
             '⚡ Proxy',
             '→',
-            '🌐 Sui DeepBook',
+            '🌐 DeepBook Predict',
           ].map((item, i) => (
             <span key={i} className={item === '→' ? 'text-green-900' : 'ds-tag'}>
               {item}
@@ -108,18 +108,18 @@ export default function HomePage() {
           {[
             {
               icon: '🔑',
-              title: 'Ephemeral Key Delegation',
-              desc: 'Your wallet authorizes a temporary key on DeepBook BalanceManager. No tx signing on every trade.',
+              title: 'Allowance-Limited Session',
+              desc: 'Your wallet funds a temporary key with only the gas and dUSDC allowance you choose. No signing on every prediction.',
             },
             {
               icon: '📺',
               title: 'Dual Screen Terminal',
-              desc: 'Top screen shows live orderbook & chart. Bottom touch screen has BUY/SELL buttons.',
+              desc: 'Top screen shows the live BTC oracle and strike. Bottom touch screen has UP/DOWN buttons.',
             },
             {
               icon: '⚡',
-              title: 'DeepBook V3 CLOB',
-              desc: 'Real on-chain market orders via Sui DeepBook — flash loans, governance, maker rebates.',
+              title: 'DeepBook Predict',
+              desc: 'Real on-chain binary positions priced by the protocol volatility surface on Sui testnet.',
             },
           ].map((f) => (
             <div key={f.title} className="ds-panel p-4">

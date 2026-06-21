@@ -16,18 +16,24 @@ const store = new Map<string, EphemeralSession>();
 export function createSession(
   sid: string,
   keypairSecretKey: string,
-  balanceManagerId: string,
+  ephemeralAddress: string,
   userAddress: string,
 ): void {
   const now = Date.now();
   store.set(sid, {
     keypairSecretKey,
-    balanceManagerId,
+    ephemeralAddress,
     userAddress,
     createdAt: now,
     expiresAt: now + SESSION_TTL_MS,
   });
   console.log(`[session] Created session ${sid} for ${userAddress}`);
+}
+
+export function setSessionManager(sid: string, managerId: string): void {
+  const session = getSession(sid);
+  if (!session) throw new Error('Session not found or expired');
+  session.managerId = managerId;
 }
 
 export function getSession(sid: string): EphemeralSession | undefined {

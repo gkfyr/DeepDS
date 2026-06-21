@@ -1,8 +1,9 @@
 // Shared TypeScript types for the proxy
 
 export interface EphemeralSession {
-  keypairSecretKey: string;      // base64-encoded 32-byte Ed25519 secret key
-  balanceManagerId: string;      // Sui object ID of the user's DeepBook BalanceManager
+  keypairSecretKey: string;      // Bech32-encoded Ed25519 secret key
+  ephemeralAddress: string;
+  managerId?: string;            // PredictManager owned by the ephemeral key
   userAddress: string;           // User's main wallet address (for display)
   expiresAt: number;             // Unix timestamp (ms)
   createdAt: number;
@@ -10,16 +11,18 @@ export interface EphemeralSession {
 
 export interface TradeRequest {
   sid: string;                   // Session ID (UUID)
-  action: 'BUY' | 'SELL';
-  qty: string;                   // Quantity in base token units (string to avoid JS number precision issues)
-  pool?: string;                 // Pool key, default: 'SUI_USDC'
+  action: 'UP' | 'DOWN';
+  qty?: string;                  // Position quantity, fixed point 1e9 = 1 unit
 }
 
 export interface MarketDataResponse {
-  bid: number;
-  ask: number;
-  spread: number;
-  vol: number;
+  spot: number;
+  strike: number;
+  up: number;
+  down: number;
+  expiry: number;
+  oracle: string;
+  status: string;
   ts: number;                    // Timestamp
 }
 
@@ -31,12 +34,13 @@ export interface TradeResponse {
 
 export interface BalanceResponse {
   sui: string;
-  usdc: string;
+  dusdc: string;
+  manager: string;
 }
 
 export interface SessionCreateRequest {
   sid: string;
-  privkey: string;               // base64 secret key
-  balanceManagerId: string;
+  privkey: string;               // Bech32 secret key
+  ephemeralAddress: string;
   userAddress: string;
 }

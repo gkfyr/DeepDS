@@ -6,11 +6,9 @@
  * Flow:
  * 1. Generate ephemeral Ed25519 keypair (in browser memory)
  * 2. Register session with proxy (POST /api/session)
- * 3. Sign PTB with user's wallet:
- *    - balance_manager::authorize_trader(balanceManagerId, ephemeralAddress)
- *    - Transfer gas SUI to ephemeral address
- * 4. Display QR code for 3DS to scan
- * 5. Show live balance & market data
+ * 3. Transfer a limited SUI + dUSDC allowance to the ephemeral address
+ * 4. Proxy creates/funds a PredictManager owned by the ephemeral key
+ * 5. Display QR code for 3DS to scan
  *
  * Judging criteria this covers:
  * - DeepBook utilization (authorize_trader on BalanceManager)
@@ -22,10 +20,15 @@ import { useState, useEffect } from 'react';
 import { useCurrentAccount, useSignTransaction, useSuiClient } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
 import { v4 as uuidv4 } from 'uuid';
-import { generateEphemeralKeypair } from '../lib/ephemeral';
-import { registerSession, revokeSession, PROXY_URL } from '../lib/proxy';
-import { SessionQR } from '../components/SessionQR';
-import { LiveStatus } from '../components/LiveStatus';
+import { generateEphemeralKeypair } from '../../lib/ephemeral';
+import {
+  initializeSession,
+  registerSession,
+  revokeSession,
+  PROXY_URL,
+} from '../../lib/proxy';
+import { SessionQR } from '../../components/SessionQR';
+import { LiveStatus } from '../../components/LiveStatus';
 import Link from 'next/link';
 
 type Step =
@@ -39,16 +42,16 @@ type Step =
 interface SessionState {
   sid: string;
   ephemeralAddress: string;
-  balanceManagerId: string;
+  managerId: string;
 }
 
 // Gas amount to transfer to ephemeral address for transaction fees
 const GAS_ALLOWANCE_MIST = 50_000_000n; // 0.05 SUI
 
-// PoC: use a hardcoded or user-input BalanceManager ID
-// In production, this would be fetched from the blockchain
-const DEFAULT_BALANCE_MANAGER =
-  process.env.NEXT_PUBLIC_BALANCE_MANAGER_ID ?? '';
+const DUSDC_TYPE =
+  '0xe95040085976bfd54a1a07225cd46c8a2b4e8e2b6732f140a0fc49850ba73e1a::dusdc::DUSDC';
+const DEFAULT_DUSDC_ALLOWANCE =
+  process.env.NEXT_PUBLIC_DUSDC_ALLOWANCE ?? '5';
 
 export default function SessionPage() {
   const account = useCurrentAccount();
@@ -59,7 +62,7 @@ export default function SessionPage() {
   const [session, setSession] = useState<SessionState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
-  const [balanceManagerId, setBalanceManagerId] = useState(DEFAULT_BALANCE_MANAGER);
+  const [dusdcAllowance, setDusdcAllowance] = useState(DEFAULT_DUSDC_ALLOWANCE);
   const [proxyUrl, setProxyUrl] = useState(PROXY_URL);
   const [txDigest, setTxDigest] = useState<string | null>(null);
 
@@ -76,7 +79,7 @@ export default function SessionPage() {
       // Step 1: Generate ephemeral keypair
       setStep('generating');
       addLog('Generating ephemeral Ed25519 keypair...');
-      const { keypair, address, secretKeyBase64 } = generateEphemeralKeypair();
+      const { address, secretKey } = generateEphemeralKeypair();
       const sid = uuidv4();
       addLog(`Ephemeral address: ${address.slice(0, 16)}...`);
       addLog(`Session ID: ${sid}`);
@@ -85,31 +88,58 @@ export default function SessionPage() {
       setStep('registering');
       addLog(`Registering session with proxy at ${proxyUrl}...`);
 
-      const bmId = balanceManagerId.trim() || `DEMO_${sid.slice(0, 8)}`;
-      await registerSession({
-        sid,
-        privkey: secretKeyBase64,
-        balanceManagerId: bmId,
-        userAddress: account.address,
-      });
+      await registerSession(
+        {
+          sid,
+          privkey: secretKey,
+          ephemeralAddress: address,
+          userAddress: account.address,
+        },
+        proxyUrl,
+      );
       addLog('Session registered successfully!');
 
-      // Step 3: Sign the delegation PTB with user's wallet
+      // Step 3: Fund the limited session wallet
       setStep('waiting-wallet');
-      addLog('Building delegation PTB...');
+      addLog('Building session allowance PTB...');
 
       const tx = new Transaction();
       tx.setSender(account.address);
 
       // Transfer gas SUI to ephemeral address
-      // Note: In a production app with a real BalanceManager, you would also call:
-      // balance_manager::authorize_trader(balanceManagerId, address)
-      // For the PoC, we just fund the ephemeral address with gas
       const [gasCoin] = tx.splitCoins(tx.gas, [GAS_ALLOWANCE_MIST]);
       tx.transferObjects([gasCoin], address);
 
-      addLog('Requesting wallet signature...');
-      addLog('(Approving transfers 0.05 SUI gas to ephemeral address)');
+      const allowanceBaseUnits = BigInt(
+        Math.round(Number(dusdcAllowance) * 1_000_000),
+      );
+      if (allowanceBaseUnits <= 0n) {
+        throw new Error('dUSDC allowance must be greater than zero');
+      }
+
+      const coins = await suiClient.getCoins({
+        owner: account.address,
+        coinType: DUSDC_TYPE,
+      });
+      const total = coins.data.reduce(
+        (sum, coin) => sum + BigInt(coin.balance),
+        0n,
+      );
+      if (total < allowanceBaseUnits) {
+        throw new Error(
+          `Insufficient dUSDC. Need ${dusdcAllowance} dUSDC in the connected wallet.`,
+        );
+      }
+
+      const [primary, ...rest] = coins.data.map((coin) =>
+        tx.object(coin.coinObjectId),
+      );
+      if (rest.length > 0) tx.mergeCoins(primary!, rest);
+      const [allowanceCoin] = tx.splitCoins(primary!, [allowanceBaseUnits]);
+      tx.transferObjects([allowanceCoin], address);
+
+      addLog('Requesting one wallet signature...');
+      addLog(`Funding 0.05 SUI + ${dusdcAllowance} dUSDC allowance`);
 
       const { bytes, signature } = await signTransaction({ transaction: tx });
 
@@ -123,10 +153,19 @@ export default function SessionPage() {
 
       setTxDigest(result.digest);
       addLog(`✅ Transaction confirmed! Digest: ${result.digest.slice(0, 20)}...`);
-      addLog('Ephemeral key funded. Ready to trade!');
+      addLog('Creating ephemeral PredictManager...');
+
+      await suiClient.waitForTransaction({ digest: result.digest });
+      const initialized = await initializeSession(sid, proxyUrl);
+      addLog(`✅ PredictManager ready: ${initialized.managerId.slice(0, 18)}...`);
+      addLog('Session is ready for 3DS UP/DOWN predictions!');
 
       // Step 4: Show QR
-      setSession({ sid, ephemeralAddress: address, balanceManagerId: bmId });
+      setSession({
+        sid,
+        ephemeralAddress: address,
+        managerId: initialized.managerId,
+      });
       setStep('active');
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -138,7 +177,7 @@ export default function SessionPage() {
 
   const endSession = async () => {
     if (!session) return;
-    await revokeSession(session.sid).catch(() => {});
+    await revokeSession(session.sid, proxyUrl).catch(() => {});
     setSession(null);
     setStep('idle');
     setLogs([]);
@@ -197,19 +236,21 @@ export default function SessionPage() {
               </p>
             </div>
 
-            {/* Balance Manager ID */}
+            {/* dUSDC allowance */}
             <div className="mb-4">
-              <label className="ds-label">BALANCE MANAGER ID (optional)</label>
+              <label className="ds-label">SESSION ALLOWANCE (dUSDC)</label>
               <input
-                id="balance-manager-id"
+                id="dusdc-allowance"
                 className="ds-input"
-                value={balanceManagerId}
-                onChange={(e) => setBalanceManagerId(e.target.value)}
-                placeholder="0x... (leave blank for PoC demo)"
+                type="number"
+                min="0.1"
+                step="0.1"
+                value={dusdcAllowance}
+                onChange={(e) => setDusdcAllowance(e.target.value)}
                 disabled={step !== 'idle' && step !== 'error'}
               />
               <p className="text-xs text-green-900 mt-1">
-                Your DeepBook BalanceManager object ID
+                Maximum capital exposed to the temporary 3DS session
               </p>
             </div>
 
@@ -293,6 +334,7 @@ export default function SessionPage() {
                 <LiveStatus
                   sid={session.sid}
                   ephemeralAddress={session.ephemeralAddress}
+                  proxyUrl={proxyUrl}
                 />
               </div>
             </>
@@ -312,11 +354,11 @@ export default function SessionPage() {
             <div className="ds-title text-xs mb-2">HOW IT WORKS</div>
             {[
               '1. Browser generates temporary Ed25519 keypair',
-              '2. Keypair registered with proxy (in-memory)',
-              '3. Wallet signs PTB to fund ephemeral address',
-              '4. 3DS scans QR → connects to proxy',
-              '5. 3DS sends BUY/SELL → proxy signs DeepBook PTB',
-              '6. Trade executes on Sui testnet!',
+              '2. Keypair registered with proxy (in-memory only)',
+              '3. Wallet sends limited SUI + dUSDC allowance',
+              '4. Proxy creates an ephemeral PredictManager',
+              '5. 3DS scans QR → connects to proxy',
+              '6. UP/DOWN executes on DeepBook Predict testnet',
             ].map((step) => (
               <div key={step} className="leading-relaxed">
                 {step}

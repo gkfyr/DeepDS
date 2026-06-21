@@ -3,6 +3,12 @@
 # Makefile for devkitARM / libctru
 #---------------------------------------------------------------------------------
 
+ifeq ($(strip $(DEVKITARM)),)
+$(error "DEVKITARM is not set. Install devkitPro 3ds-dev and export DEVKITPRO/DEVKITARM")
+endif
+
+include $(DEVKITARM)/3ds_rules
+
 APP_TITLE   := DeepDS
 APP_DESCRIPTION := DeepBook V3 Trading Terminal
 APP_AUTHOR  := DeepDS Team

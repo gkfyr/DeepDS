@@ -26,10 +26,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <title>DeepDS — Nintendo 3DS Trading Terminal</title>
+        <title>DeepDS — Nintendo 3DS Predict Terminal</title>
         <meta
           name="description"
-          content="Trade DeepBook V3 on Sui using a Nintendo 3DS. A geeky retro trading terminal for the Sui Overflow 2026 hackathon."
+          content="Trade DeepBook Predict on Sui using a Nintendo 3DS. A retro prediction terminal for the Sui Overflow 2026 hackathon."
         />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>

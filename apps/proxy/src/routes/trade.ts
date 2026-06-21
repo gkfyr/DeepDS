@@ -1,111 +1,79 @@
-/**
- * Route: Execute Trade
- * POST /api/trade
- *
- * Accepts application/x-www-form-urlencoded (flat key=value)
- * for compatibility with the 3DS httpc service.
- *
- * Body params:
- *   sid    — Session ID (UUID)
- *   action — 'BUY' or 'SELL'
- *   qty    — Quantity in base token units (e.g., 1000000000 = 1 SUI)
- *   pool   — Pool key (default: SUI_USDC)
- *
- * Response (flat JSON, 3DS-friendly):
- *   {"ok":1,"digest":"0x..."} on success
- *   {"ok":0,"error":"..."} on failure
- */
-
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { Transaction } from '@mysten/sui/transactions';
 import { getSession } from '../session.js';
-import { makeDeepBookClient, suiClient } from '../sui.js';
+import {
+  CLOCK_ID,
+  DUSDC_TYPE,
+  PREDICT_ID,
+  PREDICT_PACKAGE_ID,
+  execute,
+  keypairFromSecret,
+} from '../sui.js';
+import { fetchActiveMarket } from './market.js';
 import type { TradeResponse } from '../types.js';
 
 const router = Router();
+const DEFAULT_QUANTITY = 1_000_000n;
 
-// POST /api/trade
 router.post('/', async (req: Request, res: Response) => {
-  const sid = req.body.sid as string;
-  const action = (req.body.action as string)?.toUpperCase() as 'BUY' | 'SELL';
-  const qtyStr = req.body.qty as string;
-  const poolKey = (req.body.pool as string) ?? 'SUI_USDC';
+  const sid = String(req.body.sid ?? '');
+  const action = String(req.body.action ?? '').toUpperCase();
 
-  // --- Validate inputs ---
-  if (!sid || !action || !qtyStr) {
-    const resp: TradeResponse = { ok: 0, error: 'Missing: sid, action, qty' };
-    res.status(400).json(resp);
+  if (!sid || (action !== 'UP' && action !== 'DOWN')) {
+    res.status(400).json({ ok: 0, error: 'Required: sid, action=UP|DOWN' });
     return;
   }
 
-  if (action !== 'BUY' && action !== 'SELL') {
-    const resp: TradeResponse = { ok: 0, error: 'action must be BUY or SELL' };
-    res.status(400).json(resp);
-    return;
-  }
-
-  const qty = BigInt(qtyStr);
-  if (qty <= 0n) {
-    const resp: TradeResponse = { ok: 0, error: 'qty must be > 0' };
-    res.status(400).json(resp);
-    return;
-  }
-
-  // --- Look up session ---
-  const session = getSession(sid);
-  if (!session) {
-    const resp: TradeResponse = { ok: 0, error: 'Session not found or expired' };
-    res.status(401).json(resp);
-    return;
-  }
-
-  // --- Execute trade ---
+  let quantity: bigint;
   try {
-    const { dbClient, keypair } = makeDeepBookClient(session.keypairSecretKey);
-    const ephemeralAddress = keypair.getPublicKey().toSuiAddress();
+    quantity = BigInt(String(req.body.qty ?? DEFAULT_QUANTITY));
+    if (quantity <= 0n) throw new Error();
+  } catch {
+    res.status(400).json({ ok: 0, error: 'qty must be a positive integer' });
+    return;
+  }
 
-    console.log(
-      `[trade] ${action} ${qty} on ${poolKey} by ${ephemeralAddress} (session: ${sid})`,
-    );
+  const session = getSession(sid);
+  if (!session?.managerId) {
+    res.status(401).json({ ok: 0, error: 'Session is not initialized' });
+    return;
+  }
 
+  try {
+    const market = await fetchActiveMarket();
+    const keypair = keypairFromSecret(session.keypairSecretKey);
     const tx = new Transaction();
-    tx.setSender(ephemeralAddress);
-
-    // Build DeepBook market order PTB
-    // isBid = true means BUY (paying quote to get base)
-    // isBid = false means SELL (paying base to get quote)
-    await dbClient.placeMarketOrder(
-      {
-        poolKey,
-        balanceManagerKey: session.balanceManagerId,
-        clientOrderId: BigInt(Date.now()),
-        quantity: qty,
-        isBid: action === 'BUY',
-        payWithDeep: false, // Use input token for fees (simpler for PoC)
-      },
-      tx,
-    );
-
-    // Sign and execute with ephemeral keypair
-    const result = await suiClient.signAndExecuteTransaction({
-      transaction: tx,
-      signer: keypair,
-      options: {
-        showEffects: true,
-      },
+    tx.setSender(session.ephemeralAddress);
+    const marketKey = tx.moveCall({
+      target: `${PREDICT_PACKAGE_ID}::market_key::new`,
+      arguments: [
+        tx.pure.id(market.oracle),
+        tx.pure.u64(BigInt(market.expiry)),
+        tx.pure.u64(BigInt(Math.round(market.strike * 1e9))),
+        tx.pure.bool(action === 'UP'),
+      ],
+    });
+    tx.moveCall({
+      target: `${PREDICT_PACKAGE_ID}::predict::mint`,
+      typeArguments: [DUSDC_TYPE],
+      arguments: [
+        tx.object(PREDICT_ID),
+        tx.object(session.managerId),
+        tx.object(market.oracle),
+        marketKey,
+        tx.pure.u64(quantity),
+        tx.object(CLOCK_ID),
+      ],
     });
 
-    console.log(`[trade] Success! Digest: ${result.digest}`);
-
-    const resp: TradeResponse = { ok: 1, digest: result.digest };
-    res.json(resp);
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    console.error(`[trade] Error for session ${sid}:`, errorMessage);
-
-    const resp: TradeResponse = { ok: 0, error: errorMessage };
-    res.status(500).json(resp);
+    const result = await execute(tx, keypair);
+    const response: TradeResponse = { ok: 1, digest: result.digest };
+    res.json(response);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const response: TradeResponse = { ok: 0, error: message };
+    res.status(500).json(response);
   }
 });
 

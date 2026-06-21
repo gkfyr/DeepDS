@@ -28,17 +28,20 @@
 #include "ui.h"
 
 /* ---- Simple JSON field extraction (reused from qr_scanner) ---- */
-static int json_str(const char* j, const char* k, char* out, size_t sz) {
+static int json_value(const char* j, const char* k, char* out, size_t sz) {
     char search[64];
     snprintf(search, sizeof(search), "\"%s\":", k);
     const char* p = strstr(j, search);
     if (!p) return 0;
     p += strlen(search);
     while (*p == ' ') p++;
-    if (*p != '"') return 0;
-    p++;
+    int quoted = (*p == '"');
+    if (quoted) p++;
     size_t i = 0;
-    while (*p && *p != '"' && i < sz - 1) out[i++] = *p++;
+    while (*p && i < sz - 1) {
+        if (quoted ? (*p == '"') : (*p == ',' || *p == '}' || *p == ' ')) break;
+        out[i++] = *p++;
+    }
     out[i] = '\0';
     return i > 0;
 }
@@ -62,7 +65,7 @@ static u64 g_last_market_fetch = 0;
 #define TRADE_RESULT_FRAMES      120                 /* ~2 seconds at 60fps */
 
 /* Trade quantity: 1 SUI = 1,000,000,000 MIST */
-#define TRADE_QTY_STR  "1000000000"
+#define TRADE_QTY_STR  "1000000"
 
 /* ---- Build URL helpers ---- */
 static void build_url(char* out, size_t sz, const char* endpoint) {
@@ -72,7 +75,7 @@ static void build_url(char* out, size_t sz, const char* endpoint) {
 /* ---- Fetch market data from proxy ---- */
 static void fetch_market_data(void) {
     char url[256], buf[NET_BUF_SIZE];
-    build_url(url, sizeof(url), "/api/market-data?pool=SUI_USDC");
+    build_url(url, sizeof(url), "/api/market-data");
 
     int status = http_get(url, buf, sizeof(buf));
     if (status != 200) {
@@ -80,16 +83,16 @@ static void fetch_market_data(void) {
         return;
     }
 
-    /* Parse flat JSON: {"bid":3.21,"ask":3.23,"spread":0.02,"vol":12345} */
+    /* Parse flat Predict market JSON. */
     char tmp[32];
-    if (json_str(buf, "bid", tmp, sizeof(tmp)))
-        g_market.bid = (float)atof(tmp);
-    if (json_str(buf, "ask", tmp, sizeof(tmp)))
-        g_market.ask = (float)atof(tmp);
-    if (json_str(buf, "spread", tmp, sizeof(tmp)))
-        g_market.spread = (float)atof(tmp);
-    if (json_str(buf, "vol", tmp, sizeof(tmp)))
-        g_market.volume = atoi(tmp);
+    if (json_value(buf, "spot", tmp, sizeof(tmp)))
+        g_market.spot = (float)atof(tmp);
+    if (json_value(buf, "strike", tmp, sizeof(tmp)))
+        g_market.strike = (float)atof(tmp);
+    if (json_value(buf, "up", tmp, sizeof(tmp)))
+        g_market.up_price = (float)atof(tmp);
+    if (json_value(buf, "down", tmp, sizeof(tmp)))
+        g_market.down_price = (float)atof(tmp);
 
     g_market.data_valid = 1;
 }
@@ -104,10 +107,10 @@ static void fetch_balance(void) {
     if (status != 200) return;
 
     char tmp[32];
-    if (json_str(buf, "sui", tmp, sizeof(tmp)))
+    if (json_value(buf, "sui", tmp, sizeof(tmp)))
         strncpy(g_market.sui_balance, tmp, sizeof(g_market.sui_balance) - 1);
-    if (json_str(buf, "usdc", tmp, sizeof(tmp)))
-        strncpy(g_market.usdc_balance, tmp, sizeof(g_market.usdc_balance) - 1);
+    if (json_value(buf, "dusdc", tmp, sizeof(tmp)))
+        strncpy(g_market.dusdc_balance, tmp, sizeof(g_market.dusdc_balance) - 1);
 }
 
 /* ---- Execute trade ---- */
@@ -115,9 +118,9 @@ static void execute_trade(const char* action) {
     char url[256], body[256], buf[NET_BUF_SIZE];
     build_url(url, sizeof(url), "/api/trade");
 
-    /* Form-encoded body: sid=...&action=BUY&qty=1000000000 */
+    /* Form-encoded body: sid=...&action=UP&qty=1000000 */
     snprintf(body, sizeof(body),
-             "sid=%s&action=%s&qty=%s&pool=SUI_USDC",
+             "sid=%s&action=%s&qty=%s",
              g_session.sid, action, TRADE_QTY_STR);
 
     int status = http_post(url, body, buf, sizeof(buf));
@@ -127,11 +130,11 @@ static void execute_trade(const char* action) {
     g_trade_result.show = 1;
     g_trade_result.countdown = TRADE_RESULT_FRAMES;
 
-    if (status == 200 && json_str(buf, "ok", ok_str, sizeof(ok_str))
+    if (status == 200 && json_value(buf, "ok", ok_str, sizeof(ok_str))
         && ok_str[0] == '1') {
         g_trade_result.success = 1;
         char digest[64] = {0};
-        json_str(buf, "digest", digest, sizeof(digest));
+        json_value(buf, "digest", digest, sizeof(digest));
         /* Show first 20 chars of digest */
         strncpy(g_trade_result.digest, digest, 20);
         g_trade_result.digest[20] = '\0';
@@ -143,34 +146,26 @@ static void execute_trade(const char* action) {
 
 /* ---- Software keyboard for manual URL/SID entry (PoC fallback) ---- */
 static int enter_session_manual(void) {
-    /* TODO: Use 3DS SwkbdState for text input
-     * For now, use a hardcoded test value so the app compiles and runs
-     * even without the camera QR scan working.
-     *
-     * In a real device: use swkbdInputText() to get URL and SID from user.
-     */
-
-    /* Example:
     SwkbdState swkbd;
     char url_buf[SESSION_URL_MAX];
+    char sid_buf[SESSION_SID_MAX];
     swkbdInit(&swkbd, SWKBD_TYPE_NORMAL, 2, SESSION_URL_MAX - 1);
     swkbdSetHintText(&swkbd, "Proxy URL (e.g. http://192.168.1.5:3001)");
     SwkbdButton btn = swkbdInputText(&swkbd, url_buf, sizeof(url_buf));
     if (btn != SWKBD_BUTTON_CONFIRM) return 0;
-    */
 
-    /* PoC: hardcoded for local testing — change before demo! */
-    const char* test_url = "http://192.168.1.100:3001";
-    const char* test_sid = "00000000-0000-0000-0000-000000000001";
-    session_set(test_url, test_sid);
+    swkbdInit(&swkbd, SWKBD_TYPE_NORMAL, 2, SESSION_SID_MAX - 1);
+    swkbdSetHintText(&swkbd, "Session UUID from web");
+    btn = swkbdInputText(&swkbd, sid_buf, sizeof(sid_buf));
+    if (btn != SWKBD_BUTTON_CONFIRM) return 0;
 
-    return 1;
+    return session_set(url_buf, sid_buf);
 }
 
 /* ---- Verify session with proxy ---- */
 static int verify_session(void) {
     char url[256], buf[NET_BUF_SIZE];
-    build_url(url, sizeof(url), "/");
+    snprintf(url, sizeof(url), "%s/api/session/%s", g_session.url, g_session.sid);
 
     int status = http_get(url, buf, sizeof(buf));
     return (status == 200);
@@ -189,6 +184,7 @@ int main(int argc, char* argv[]) {
     C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
     C2D_Init(C2D_DEFAULT_MAX_OBJECTS);
     C2D_Prepare();
+    ui_init();
 
     /* Create render targets */
     C3D_RenderTarget* top = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
@@ -203,7 +199,7 @@ int main(int argc, char* argv[]) {
     memset(&g_market, 0, sizeof(g_market));
     memset(&g_trade_result, 0, sizeof(g_trade_result));
     strncpy(g_market.sui_balance, "0.0000", sizeof(g_market.sui_balance));
-    strncpy(g_market.usdc_balance, "0.00", sizeof(g_market.usdc_balance));
+    strncpy(g_market.dusdc_balance, "0.00", sizeof(g_market.dusdc_balance));
 
     /* Initialize network */
     int net_ok = (network_init() == 0);
@@ -297,12 +293,12 @@ int main(int argc, char* argv[]) {
                 if (ui_touch_in_buy(touch.px, touch.py)) {
                     buy_pressed_frame = 1;
                     if (keys_down & KEY_TOUCH) {
-                        execute_trade("BUY");
+                        execute_trade("UP");
                     }
-                } else if (ui_touch_in_sell(touch.px, touch.py)) {
+                } else if (ui_touch_in_down(touch.px, touch.py)) {
                     sell_pressed_frame = 1;
                     if (keys_down & KEY_TOUCH) {
-                        execute_trade("SELL");
+                        execute_trade("DOWN");
                     }
                 } else if (ui_touch_in_refresh(touch.px, touch.py)) {
                     if (keys_down & KEY_TOUCH) {

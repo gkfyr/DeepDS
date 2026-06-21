@@ -11,8 +11,8 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 export interface EphemeralKeyPair {
   keypair: Ed25519Keypair;
   address: string;
-  /** Base64-encoded 32-byte secret key for proxy transmission */
-  secretKeyBase64: string;
+  /** Sui Bech32 secret key for proxy transmission */
+  secretKey: string;
 }
 
 /**
@@ -24,8 +24,5 @@ export function generateEphemeralKeypair(): EphemeralKeyPair {
   const address = keypair.getPublicKey().toSuiAddress();
 
   // Export the 32-byte raw secret key as base64 for proxy
-  const secretKeyBytes = keypair.getSecretKey();
-  const secretKeyBase64 = Buffer.from(secretKeyBytes).toString('base64');
-
-  return { keypair, address, secretKeyBase64 };
+  return { keypair, address, secretKey: keypair.getSecretKey() };
 }

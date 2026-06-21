@@ -2,7 +2,7 @@
  * ui.h — DeepDS UI rendering for Nintendo 3DS
  *
  * Top screen (400x240): Orderbook data, session info, price chart
- * Bottom screen (320x240): BUY/SELL touch buttons, status
+ * Bottom screen (320x240): UP/DOWN touch buttons, status
  *
  * Uses citro2d for 2D rendering on top of citro3d.
  */
@@ -51,12 +51,13 @@
 
 /* Market data for display */
 typedef struct {
-    float bid;
-    float ask;
-    float spread;
-    int   volume;
+    float spot;
+    float strike;
+    float up_price;
+    float down_price;
+    long long expiry;
     char  sui_balance[16];
-    char  usdc_balance[16];
+    char  dusdc_balance[16];
     int   data_valid;
 } MarketDisplay;
 
@@ -85,7 +86,7 @@ void ui_draw_top(
 
 /**
  * Draw the bottom touch screen.
- * Shows: BUY/SELL buttons, quantity selector, status
+ * Shows: UP/DOWN buttons, quantity selector, status
  */
 void ui_draw_bottom(
     const TradeResult* last_trade,
@@ -97,6 +98,6 @@ void ui_draw_bottom(
  * Check if a touch point is within a button area.
  */
 int ui_touch_in_buy(u16 tx, u16 ty);
-int ui_touch_in_sell(u16 tx, u16 ty);
+int ui_touch_in_down(u16 tx, u16 ty);
 int ui_touch_in_refresh(u16 tx, u16 ty);
 int ui_touch_in_quit(u16 tx, u16 ty);

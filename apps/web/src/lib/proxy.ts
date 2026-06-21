@@ -9,26 +9,33 @@ const PROXY_URL =
 export interface SessionPayload {
   sid: string;
   privkey: string;
-  balanceManagerId: string;
+  ephemeralAddress: string;
   userAddress: string;
 }
 
 export interface MarketData {
-  bid: number;
-  ask: number;
-  spread: number;
-  vol: number;
+  spot: number;
+  strike: number;
+  up: number;
+  down: number;
+  expiry: number;
+  oracle: string;
+  status: string;
   ts: number;
 }
 
 export interface BalanceData {
   sui: string;
-  usdc: string;
+  dusdc: string;
+  manager: string;
 }
 
 /** Register an ephemeral session with the proxy */
-export async function registerSession(payload: SessionPayload): Promise<void> {
-  const response = await fetch(`${PROXY_URL}/api/session`, {
+export async function registerSession(
+  payload: SessionPayload,
+  baseUrl = PROXY_URL,
+): Promise<void> {
+  const response = await fetch(`${baseUrl}/api/session`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -42,19 +49,39 @@ export async function registerSession(payload: SessionPayload): Promise<void> {
   }
 }
 
+/** Create and fund the ephemeral key's PredictManager after wallet funding */
+export async function initializeSession(
+  sid: string,
+  baseUrl = PROXY_URL,
+): Promise<{ managerId: string; digest?: string }> {
+  const response = await fetch(`${baseUrl}/api/session/${sid}/initialize`, {
+    method: 'POST',
+  });
+  const result = (await response.json().catch(() => ({}))) as {
+    managerId?: string;
+    digest?: string;
+    error?: string;
+  };
+  if (!response.ok || !result.managerId) {
+    throw new Error(result.error ?? 'Failed to initialize PredictManager');
+  }
+  return { managerId: result.managerId, digest: result.digest };
+}
+
 /** Revoke a session from the proxy */
-export async function revokeSession(sid: string): Promise<void> {
-  await fetch(`${PROXY_URL}/api/session/${sid}`, { method: 'DELETE' });
+export async function revokeSession(
+  sid: string,
+  baseUrl = PROXY_URL,
+): Promise<void> {
+  await fetch(`${baseUrl}/api/session/${sid}`, { method: 'DELETE' });
 }
 
 /** Fetch current market data for a pool */
 export async function fetchMarketData(
-  pool = 'SUI_USDC',
+  baseUrl = PROXY_URL,
 ): Promise<MarketData | null> {
   try {
-    const response = await fetch(
-      `${PROXY_URL}/api/market-data?pool=${pool}`,
-    );
+    const response = await fetch(`${baseUrl}/api/market-data`);
     if (!response.ok) return null;
     return response.json() as Promise<MarketData>;
   } catch {
@@ -65,9 +92,10 @@ export async function fetchMarketData(
 /** Check the balance of the ephemeral address */
 export async function fetchBalance(
   sid: string,
+  baseUrl = PROXY_URL,
 ): Promise<BalanceData | null> {
   try {
-    const response = await fetch(`${PROXY_URL}/api/balance/${sid}`);
+    const response = await fetch(`${baseUrl}/api/balance/${sid}`);
     if (!response.ok) return null;
     return response.json() as Promise<BalanceData>;
   } catch {

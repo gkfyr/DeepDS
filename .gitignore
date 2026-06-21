@@ -1,4 +1,5 @@
 node_modules/
+.pnpm-store/
 dist/
 .next/
 out/
@@ -10,5 +11,6 @@ out/
 .env.local
 .env*.local
 *.log
+*.tsbuildinfo
 .DS_Store
 Thumbs.db

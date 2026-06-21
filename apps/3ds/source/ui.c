@@ -3,7 +3,7 @@
  *
  * Renders the DeepBook trading interface on the 3DS dual screens:
  * - Top (400x240): Orderbook data, balances, session info
- * - Bottom (320x240): BUY/SELL touch buttons with visual feedback
+ * - Bottom (320x240): UP/DOWN touch buttons with visual feedback
  */
 
 #include "ui.h"
@@ -99,19 +99,19 @@ void ui_draw_top(
 
     /* ── Market data panel ── */
     draw_border_rect(8, 45, 190, 90, C2D_Color32(0, 20, 6, 200), COL_GREEN_DARK);
-    draw_text("SUI/USDC", 14, 58, 0.45f, COL_BLUE);
+    draw_text("BTC PREDICT", 14, 58, 0.45f, COL_BLUE);
 
     if (market && market->data_valid) {
-        snprintf(buf, sizeof(buf), "BID  %.4f", market->bid);
+        snprintf(buf, sizeof(buf), "SPOT $%.2f", market->spot);
         draw_text(buf, 14, 75, 0.45f, COL_GREEN);
 
-        snprintf(buf, sizeof(buf), "ASK  %.4f", market->ask);
+        snprintf(buf, sizeof(buf), "K    $%.0f", market->strike);
         draw_text(buf, 14, 92, 0.45f, COL_RED);
 
-        snprintf(buf, sizeof(buf), "SPR  %.4f", market->spread);
+        snprintf(buf, sizeof(buf), "UP   %.1fc", market->up_price * 100.0f);
         draw_text(buf, 14, 109, 0.4f, COL_YELLOW);
 
-        snprintf(buf, sizeof(buf), "VOL  %d", market->volume);
+        snprintf(buf, sizeof(buf), "DOWN %.1fc", market->down_price * 100.0f);
         draw_text(buf, 14, 124, 0.4f, COL_GREEN_DIM);
     } else {
         draw_text("LOADING...", 14, 90, 0.45f, COL_GREEN_DIM);
@@ -129,7 +129,7 @@ void ui_draw_top(
         snprintf(buf, sizeof(buf), "SUI   %s", market->sui_balance);
         draw_text(buf, 210, 75, 0.43f, COL_GREEN);
 
-        snprintf(buf, sizeof(buf), "USDC  %s", market->usdc_balance);
+        snprintf(buf, sizeof(buf), "dUSDC %s", market->dusdc_balance);
         draw_text(buf, 210, 92, 0.43f, COL_GREEN);
     } else {
         draw_text("---", 210, 80, 0.45f, COL_GREEN_DIM);
@@ -141,7 +141,7 @@ void ui_draw_top(
 
     /* Draw a simple "chart" using random-looking bars for demo */
     if (market && market->data_valid) {
-        float base_price = market->bid;
+        float base_price = market->spot;
         /* Static jitter for visual effect */
         static float chart_vals[30] = {0};
         static int chart_init = 0;
@@ -183,7 +183,7 @@ void ui_draw_top(
 void ui_draw_bottom(
     const TradeResult* last_trade,
     int buy_pressed,
-    int sell_pressed
+    int down_pressed
 ) {
     char buf[128];
 
@@ -195,14 +195,14 @@ void ui_draw_bottom(
     draw_text("TRADING CONTROLS", 60, 13, 0.45f, COL_GREEN);
 
     /* Quantity display */
-    draw_text("QTY: 1.0 SUI", 100, 45, 0.45f, COL_GREEN_DIM);
+    draw_text("MAX PAYOUT: 1 dUSDC", 72, 45, 0.45f, COL_GREEN_DIM);
 
-    /* ── BUY Button ── */
+    /* ── UP Button ── */
     u32 buy_bg  = buy_pressed  ? C2D_Color32(0, 180, 60, 255)  : C2D_Color32(0, 60, 20, 220);
     u32 buy_brd = buy_pressed  ? COL_GREEN   : C2D_Color32(0, 120, 40, 255);
     draw_border_rect(BTN_BUY_X, BTN_BUY_Y, BTN_BUY_W, BTN_BUY_H, buy_bg, buy_brd);
-    draw_text("BUY", BTN_BUY_X + 45, BTN_BUY_Y + 35, 0.7f, COL_GREEN);
-    draw_text("1.0 SUI", BTN_BUY_X + 30, BTN_BUY_Y + 58, 0.45f, COL_GREEN_DIM);
+    draw_text("UP", BTN_BUY_X + 50, BTN_BUY_Y + 35, 0.7f, COL_GREEN);
+    draw_text("BTC >", BTN_BUY_X + 38, BTN_BUY_Y + 58, 0.45f, COL_GREEN_DIM);
 
     /* Glow effect when pressed */
     if (buy_pressed) {
@@ -210,14 +210,14 @@ void ui_draw_bottom(
         draw_rect(BTN_BUY_X - 2, BTN_BUY_Y + BTN_BUY_H, BTN_BUY_W + 4, 2, COL_GREEN);
     }
 
-    /* ── SELL Button ── */
-    u32 sell_bg  = sell_pressed ? C2D_Color32(180, 30, 50, 220)  : C2D_Color32(60, 10, 18, 220);
-    u32 sell_brd = sell_pressed ? COL_RED    : C2D_Color32(160, 40, 60, 255);
+    /* ── DOWN Button ── */
+    u32 sell_bg  = down_pressed ? C2D_Color32(180, 30, 50, 220)  : C2D_Color32(60, 10, 18, 220);
+    u32 sell_brd = down_pressed ? COL_RED    : C2D_Color32(160, 40, 60, 255);
     draw_border_rect(BTN_SELL_X, BTN_SELL_Y, BTN_SELL_W, BTN_SELL_H, sell_bg, sell_brd);
-    draw_text("SELL", BTN_SELL_X + 40, BTN_SELL_Y + 35, 0.7f, COL_RED);
-    draw_text("1.0 SUI", BTN_SELL_X + 30, BTN_SELL_Y + 58, 0.45f, C2D_Color32(200, 80, 100, 255));
+    draw_text("DOWN", BTN_SELL_X + 34, BTN_SELL_Y + 35, 0.7f, COL_RED);
+    draw_text("BTC <", BTN_SELL_X + 38, BTN_SELL_Y + 58, 0.45f, C2D_Color32(200, 80, 100, 255));
 
-    if (sell_pressed) {
+    if (down_pressed) {
         draw_rect(BTN_SELL_X - 2, BTN_SELL_Y - 2, BTN_SELL_W + 4, 2, COL_RED);
         draw_rect(BTN_SELL_X - 2, BTN_SELL_Y + BTN_SELL_H, BTN_SELL_W + 4, 2, COL_RED);
     }
@@ -247,7 +247,7 @@ void ui_draw_bottom(
         }
         draw_text(buf, 14, 233, 0.35f, result_col);
     } else {
-        draw_text("TOUCH BUY OR SELL TO TRADE", 35, 234, 0.38f, C2D_Color32(0, 60, 20, 255));
+        draw_text("TOUCH UP OR DOWN TO PREDICT", 30, 234, 0.38f, C2D_Color32(0, 60, 20, 255));
     }
 }
 
@@ -261,7 +261,7 @@ int ui_touch_in_buy(u16 tx, u16 ty) {
     return point_in_rect(tx, ty, BTN_BUY_X, BTN_BUY_Y, BTN_BUY_W, BTN_BUY_H);
 }
 
-int ui_touch_in_sell(u16 tx, u16 ty) {
+int ui_touch_in_down(u16 tx, u16 ty) {
     return point_in_rect(tx, ty, BTN_SELL_X, BTN_SELL_Y, BTN_SELL_W, BTN_SELL_H);
 }
 
