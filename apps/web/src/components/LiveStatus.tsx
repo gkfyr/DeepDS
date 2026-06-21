@@ -1,13 +1,12 @@
 'use client';
 
-/**
- * Live Status Panel
- * Polls the proxy for balance updates every 5 seconds.
- * Displays SUI and USDC balances of the ephemeral trading address.
- */
-
 import { useEffect, useState } from 'react';
-import { fetchBalance, fetchMarketData, type BalanceData, type MarketData } from '../lib/proxy';
+import {
+  fetchBalance,
+  fetchMarketData,
+  type BalanceData,
+  type MarketData,
+} from '../lib/proxy';
 
 interface LiveStatusProps {
   sid: string;
@@ -23,81 +22,114 @@ export function LiveStatus({ sid, ephemeralAddress, proxyUrl }: LiveStatusProps)
 
   useEffect(() => {
     const update = async () => {
-      try {
-        const [bal, mkt] = await Promise.all([
-          fetchBalance(sid, proxyUrl),
-          fetchMarketData(proxyUrl),
-        ]);
-        if (bal) setBalance(bal);
-        if (mkt) setMarket(mkt);
-        setLastUpdate(new Date());
-        setError(null);
-      } catch {
-        setError('Failed to fetch data');
+      const [bal, mkt] = await Promise.all([
+        fetchBalance(sid, proxyUrl),
+        fetchMarketData(proxyUrl),
+      ]);
+
+      if (!bal && !mkt) {
+        setError('Proxy is not responding. Check the local address.');
+        return;
       }
+
+      if (bal) setBalance(bal);
+      if (mkt) setMarket(mkt);
+      setLastUpdate(new Date());
+      setError(null);
     };
 
-    update();
-    const interval = setInterval(update, 5000);
+    void update();
+    const interval = setInterval(() => void update(), 5000);
     return () => clearInterval(interval);
   }, [sid, proxyUrl]);
 
   return (
-    <div className="space-y-3">
-      {/* Connection status */}
-      <div className="flex items-center gap-2 text-xs">
-        <span className="ds-status-dot" />
-        <span className="text-green-600">
-          LIVE · Updated {lastUpdate.toLocaleTimeString()}
-        </span>
-        {error && <span className="text-red-400 ml-auto">⚠ {error}</span>}
+    <div>
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <p className="eyebrow">Live session</p>
+          <h2 className="mt-2 text-2xl font-extrabold tracking-[-0.04em] text-ds-ink">
+            Console status
+          </h2>
+        </div>
+        <div className="flex items-center gap-2 rounded-full bg-[#eaf8f3] px-3 py-2 font-mono text-[10px] font-medium text-[#187b5c]">
+          <span className="status-dot" />
+          {error ? 'OFFLINE' : 'LIVE'}
+        </div>
       </div>
 
-      {/* Market data */}
-      {market && (
-        <div className="ds-panel p-3 grid grid-cols-2 gap-2 text-xs">
-          <div>
-            <div className="ds-label">BTC SPOT</div>
-            <div className="ds-value text-sm">${market.spot.toFixed(2)}</div>
-          </div>
-          <div>
-            <div className="ds-label">STRIKE</div>
-            <div className="ds-value text-sm">${market.strike.toFixed(0)}</div>
-          </div>
-          <div>
-            <div className="ds-label">UP MARK</div>
-            <div className="text-yellow-400 font-mono">{(market.up * 100).toFixed(1)}¢</div>
-          </div>
-          <div>
-            <div className="ds-label">EXPIRES</div>
-            <div className="text-ds-blue font-mono">
-              {new Date(market.expiry).toLocaleTimeString()}
-            </div>
-          </div>
+      {error && (
+        <div className="mb-4 rounded-[14px] bg-[#fff1f1] px-4 py-3 text-sm text-[#a74444]">
+          {error}
         </div>
       )}
 
-      {/* Balance */}
-      <div className="ds-panel p-3 space-y-2 text-xs">
-        <div className="ds-label">EPHEMERAL WALLET BALANCE</div>
-        <div className="font-mono text-xs text-green-800 break-all mb-2">
+      <div className="overflow-hidden rounded-[20px] bg-ds-screen p-5 text-white">
+        <div className="flex items-center justify-between border-b border-[#23445c] pb-4">
+          <div>
+            <div className="font-mono text-[9px] uppercase tracking-[0.15em] text-[#74b8e7]">
+              BTC spot
+            </div>
+            <div className="mt-1 font-mono text-2xl">
+              {market ? `$${market.spot.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '—'}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="font-mono text-[9px] uppercase tracking-[0.15em] text-[#74b8e7]">
+              Strike
+            </div>
+            <div className="mt-1 font-mono text-lg">
+              {market ? `$${market.strike.toLocaleString()}` : '—'}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 pt-4">
+          <div>
+            <div className="font-mono text-[9px] uppercase text-[#6f9dbb]">UP</div>
+            <div className="mt-1 font-mono text-sm text-[#79dabc]">
+              {market ? `${(market.up * 100).toFixed(1)}¢` : '—'}
+            </div>
+          </div>
+          <div>
+            <div className="font-mono text-[9px] uppercase text-[#6f9dbb]">DOWN</div>
+            <div className="mt-1 font-mono text-sm text-[#ffadb8]">
+              {market ? `${(market.down * 100).toFixed(1)}¢` : '—'}
+            </div>
+          </div>
+          <div>
+            <div className="font-mono text-[9px] uppercase text-[#6f9dbb]">Expires</div>
+            <div className="mt-1 font-mono text-sm text-white">
+              {market ? new Date(market.expiry).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="flat-card p-4">
+          <div className="data-label">Gas balance</div>
+          <div className="mt-2 text-xl font-extrabold tracking-[-0.04em] text-ds-ink">
+            {balance?.sui ?? '—'} <span className="text-sm text-ds-muted">SUI</span>
+          </div>
+        </div>
+        <div className="flat-card p-4">
+          <div className="data-label">Session allowance</div>
+          <div className="mt-2 text-xl font-extrabold tracking-[-0.04em] text-ds-ink">
+            {balance?.dusdc ?? '—'} <span className="text-sm text-ds-muted">dUSDC</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-[16px] bg-ds-blue-pale p-4">
+        <div className="data-label">Ephemeral wallet</div>
+        <div className="mt-2 break-all font-mono text-[10px] leading-5 text-ds-muted">
           {ephemeralAddress}
         </div>
-        <div className="flex justify-between items-center">
-          <span className="text-green-700">SUI</span>
-          <span className="ds-value">
-            {balance ? balance.sui : '---'} SUI
-          </span>
-        </div>
-        <div className="flex justify-between items-center">
-          <span className="text-green-700">dUSDC (wallet)</span>
-          <span className="ds-value">
-            {balance ? balance.dusdc : '---'} dUSDC
-          </span>
-        </div>
-        <div className="text-green-800 break-all">
-          Manager: {balance?.manager || 'initializing...'}
-        </div>
+      </div>
+
+      <div className="mt-3 text-right font-mono text-[9px] uppercase tracking-[0.12em] text-ds-muted">
+        Updated {lastUpdate.toLocaleTimeString()}
       </div>
     </div>
   );

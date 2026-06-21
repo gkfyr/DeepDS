@@ -13,6 +13,7 @@ import type { Request, Response } from 'express';
 import { getSession } from '../session.js';
 import { DUSDC_TYPE, getCoinBalance } from '../sui.js';
 import type { BalanceResponse } from '../types.js';
+import { DUMMY_MODE } from '../config.js';
 
 const router = Router();
 
@@ -27,6 +28,16 @@ router.get('/:sid', async (req: Request, res: Response) => {
   }
 
   try {
+    if (DUMMY_MODE) {
+      const resp: BalanceResponse = {
+        sui: '0.0500',
+        dusdc: (Number(session.mockBalance ?? 0n) / 1e6).toFixed(2),
+        manager: session.managerId ?? '',
+      };
+      res.json(resp);
+      return;
+    }
+
     const [suiRaw, dusdcRaw] = await Promise.all([
       getCoinBalance(session.ephemeralAddress, '0x2::sui::SUI'),
       getCoinBalance(session.ephemeralAddress, DUSDC_TYPE),

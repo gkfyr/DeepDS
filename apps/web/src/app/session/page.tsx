@@ -16,7 +16,7 @@
  * - UX (clear step-by-step onboarding)
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useCurrentAccount, useSignTransaction, useSuiClient } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
 import { v4 as uuidv4 } from 'uuid';
@@ -52,6 +52,7 @@ const DUSDC_TYPE =
   '0xe95040085976bfd54a1a07225cd46c8a2b4e8e2b6732f140a0fc49850ba73e1a::dusdc::DUSDC';
 const DEFAULT_DUSDC_ALLOWANCE =
   process.env.NEXT_PUBLIC_DUSDC_ALLOWANCE ?? '5';
+const DUMMY_MODE = process.env.NEXT_PUBLIC_DUMMY_MODE === 'true';
 
 export default function SessionPage() {
   const account = useCurrentAccount();
@@ -71,7 +72,7 @@ export default function SessionPage() {
   };
 
   const createSession = async () => {
-    if (!account) return;
+    if (!account && !DUMMY_MODE) return;
     setError(null);
     setLogs([]);
 
@@ -93,18 +94,33 @@ export default function SessionPage() {
           sid,
           privkey: secretKey,
           ephemeralAddress: address,
-          userAddress: account.address,
+          userAddress: account?.address ?? 'dummy-local-user',
+          allowance: dusdcAllowance,
         },
         proxyUrl,
       );
       addLog('Session registered successfully!');
+
+      if (DUMMY_MODE) {
+        addLog('Dummy mode: skipping wallet funding and Sui transaction.');
+        const initialized = await initializeSession(sid, proxyUrl);
+        addLog(`Mock PredictManager ready: ${initialized.managerId}`);
+        addLog('3DS can now submit local UP/DOWN mock trades.');
+        setSession({
+          sid,
+          ephemeralAddress: address,
+          managerId: initialized.managerId,
+        });
+        setStep('active');
+        return;
+      }
 
       // Step 3: Fund the limited session wallet
       setStep('waiting-wallet');
       addLog('Building session allowance PTB...');
 
       const tx = new Transaction();
-      tx.setSender(account.address);
+      tx.setSender(account!.address);
 
       // Transfer gas SUI to ephemeral address
       const [gasCoin] = tx.splitCoins(tx.gas, [GAS_ALLOWANCE_MIST]);
@@ -118,7 +134,7 @@ export default function SessionPage() {
       }
 
       const coins = await suiClient.getCoins({
-        owner: account.address,
+        owner: account!.address,
         coinType: DUSDC_TYPE,
       });
       const total = coins.data.reduce(
@@ -184,17 +200,20 @@ export default function SessionPage() {
     setTxDigest(null);
   };
 
-  if (!account) {
+  if (!account && !DUMMY_MODE) {
     return (
-      <main className="relative z-10 min-h-screen flex flex-col items-center justify-center p-8">
-        <div className="ds-panel p-8 text-center max-w-md w-full">
-          <div className="text-4xl mb-4">🔌</div>
-          <div className="ds-title text-xl mb-4">WALLET REQUIRED</div>
-          <p className="text-green-700 text-sm mb-6">
-            Connect your Sui wallet to create a trading session.
+      <main className="grid min-h-screen place-items-center p-5">
+        <div className="soft-card w-full max-w-md p-8 text-center sm:p-10">
+          <div className="brand-mark mx-auto">DS</div>
+          <p className="eyebrow mt-7">Wallet disconnected</p>
+          <h1 className="mt-3 text-3xl font-extrabold tracking-[-0.05em] text-ds-ink">
+            Connect before pairing.
+          </h1>
+          <p className="mt-4 leading-7 text-ds-muted">
+            Your wallet creates the temporary allowance used by the 3DS session.
           </p>
-          <Link href="/">
-            <button className="ds-button">← Back to Home</button>
+          <Link href="/" className="secondary-button mt-7">
+            Back to home
           </Link>
         </div>
       </main>
@@ -202,168 +221,225 @@ export default function SessionPage() {
   }
 
   return (
-    <main className="relative z-10 min-h-screen flex flex-col">
-      {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-ds-border">
-        <Link href="/" className="text-green-700 hover:text-ds-green text-sm transition-colors">
-          ← DEEPDS
-        </Link>
-        <h1 className="ds-title text-sm">SESSION MANAGER</h1>
-        <div className="text-xs text-green-800">
-          {account.address.slice(0, 8)}...
-        </div>
-      </header>
+    <main className="min-h-screen">
+      <div className="site-shell">
+        <header className="site-header">
+          <Link href="/" className="brand" aria-label="DeepDS home">
+            <span className="brand-mark">DS</span>
+            <span className="text-xl">DeepDS</span>
+          </Link>
+          <div className="flex items-center gap-2 rounded-full border border-ds-line bg-white px-3 py-2 font-mono text-[10px] text-ds-muted">
+            <span className="status-dot" />
+            {DUMMY_MODE
+              ? 'LOCAL DUMMY'
+              : `${account!.address.slice(0, 7)}…${account!.address.slice(-5)}`}
+          </div>
+        </header>
 
-      <div className="flex-1 grid md:grid-cols-2 gap-6 p-6 max-w-5xl mx-auto w-full">
-        {/* LEFT: Setup panel */}
-        <div className="space-y-4">
-          <div className="ds-panel p-4">
-            <div className="ds-title text-xs mb-4">SESSION SETUP</div>
-
-            {/* Proxy URL config */}
-            <div className="mb-3">
-              <label className="ds-label">PROXY URL</label>
-              <input
-                id="proxy-url"
-                className="ds-input"
-                value={proxyUrl}
-                onChange={(e) => setProxyUrl(e.target.value)}
-                placeholder="http://192.168.1.x:3001"
-                disabled={step !== 'idle' && step !== 'error'}
-              />
-              <p className="text-xs text-green-900 mt-1">
-                Enter your LAN IP where apps/proxy is running
-              </p>
-            </div>
-
-            {/* dUSDC allowance */}
-            <div className="mb-4">
-              <label className="ds-label">SESSION ALLOWANCE (dUSDC)</label>
-              <input
-                id="dusdc-allowance"
-                className="ds-input"
-                type="number"
-                min="0.1"
-                step="0.1"
-                value={dusdcAllowance}
-                onChange={(e) => setDusdcAllowance(e.target.value)}
-                disabled={step !== 'idle' && step !== 'error'}
-              />
-              <p className="text-xs text-green-900 mt-1">
-                Maximum capital exposed to the temporary 3DS session
-              </p>
-            </div>
-
-            {/* Action button */}
-            {step === 'idle' || step === 'error' ? (
-              <button
-                id="create-session-btn"
-                className="ds-button-primary w-full py-3"
-                onClick={createSession}
-              >
-                🎮 Create Trading Session
-              </button>
-            ) : step === 'active' ? (
-              <button
-                id="end-session-btn"
-                className="ds-button-danger w-full py-3"
-                onClick={endSession}
-              >
-                ✕ End Session
-              </button>
-            ) : (
-              <button className="ds-button w-full py-3 opacity-50 cursor-wait" disabled>
-                {step === 'generating' && '⌛ Generating keypair...'}
-                {step === 'registering' && '⌛ Registering with proxy...'}
-                {step === 'waiting-wallet' && '⏳ Waiting for wallet...'}
-              </button>
-            )}
-
-            {error && (
-              <div className="mt-3 p-2 border border-red-800 bg-red-900/20 text-red-400 text-xs">
-                ❌ {error}
-              </div>
-            )}
+        <div className="pb-20 pt-10">
+          <div className="mb-10 max-w-2xl">
+            <p className="eyebrow">3DS pairing</p>
+            <h1 className="section-title mt-3 sm:text-5xl">
+              Create a pocket-sized trading session.
+            </h1>
+            <p className="body-copy mt-5 max-w-xl">
+              {DUMMY_MODE
+                ? 'Choose the local proxy and a pretend dUSDC balance. No wallet or blockchain is used; your real 3DS still runs the complete UI flow.'
+                : 'Choose the local proxy and a small dUSDC allowance. Your wallet approves once; the 3DS can then place predictions until the session ends.'}
+            </p>
           </div>
 
-          {/* Terminal logs */}
-          <div className="ds-panel p-4">
-            <div className="ds-title text-xs mb-3">TERMINAL</div>
-            <div
-              id="session-logs"
-              className="font-mono text-xs text-green-700 space-y-1 min-h-[120px] max-h-48 overflow-y-auto"
-            >
-              {logs.length === 0 ? (
-                <span className="text-green-900">
-                  Awaiting session creation<span className="animate-blink">_</span>
-                </span>
-              ) : (
-                logs.map((log, i) => (
-                  <div key={i} className="leading-relaxed">
-                    {log}
+          <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+            <div className="space-y-6">
+              <section className="soft-card p-6 sm:p-8">
+                <div className="mb-7 flex items-center justify-between">
+                  <div>
+                    <p className="eyebrow">Session setup</p>
+                    <h2 className="mt-2 text-2xl font-extrabold tracking-[-0.04em] text-ds-ink">
+                      Set your limits
+                    </h2>
                   </div>
-                ))
+                  <span className="grid h-10 w-10 place-items-center rounded-full bg-ds-blue-soft font-mono text-xs font-medium text-ds-ink">
+                    01
+                  </span>
+                </div>
+
+                <div>
+                  <label htmlFor="proxy-url" className="form-label">
+                    Local proxy address
+                  </label>
+                  <input
+                    id="proxy-url"
+                    className="form-input"
+                    value={proxyUrl}
+                    onChange={(e) => setProxyUrl(e.target.value)}
+                    placeholder="http://192.168.1.x:3001"
+                    disabled={step !== 'idle' && step !== 'error'}
+                  />
+                  <p className="mt-2 text-xs leading-5 text-ds-muted">
+                    Use this computer&apos;s LAN address so your 3DS can reach it.
+                  </p>
+                </div>
+
+                <div className="mt-6">
+                  <label htmlFor="dusdc-allowance" className="form-label">
+                    Session allowance
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="dusdc-allowance"
+                      className="form-input pr-20"
+                      type="number"
+                      min="0.1"
+                      step="0.1"
+                      value={dusdcAllowance}
+                      onChange={(e) => setDusdcAllowance(e.target.value)}
+                      disabled={step !== 'idle' && step !== 'error'}
+                    />
+                    <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 font-mono text-xs text-ds-muted">
+                      dUSDC
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-ds-muted">
+                    {DUMMY_MODE
+                      ? 'Virtual balance used by local mock trades. Nothing leaves a wallet.'
+                      : 'Only this amount and 0.05 SUI gas move into the temporary wallet.'}
+                  </p>
+                </div>
+
+                <div className="mt-8">
+                  {step === 'idle' || step === 'error' ? (
+                    <button
+                      id="create-session-btn"
+                      className="primary-button w-full"
+                      onClick={createSession}
+                    >
+                      {DUMMY_MODE ? 'Create dummy session' : 'Create and fund session'}
+                      <span aria-hidden="true">→</span>
+                    </button>
+                  ) : step === 'active' ? (
+                    <button
+                      id="end-session-btn"
+                      className="danger-button w-full"
+                      onClick={endSession}
+                    >
+                      End this session
+                    </button>
+                  ) : (
+                    <button className="secondary-button w-full cursor-wait opacity-70" disabled>
+                      <span className="h-2 w-2 animate-pulse rounded-full bg-ds-blue" />
+                      {step === 'generating' && 'Generating a temporary key'}
+                      {step === 'registering' && 'Connecting to the proxy'}
+                      {step === 'waiting-wallet' &&
+                        (DUMMY_MODE ? 'Preparing dummy session' : 'Waiting for wallet approval')}
+                    </button>
+                  )}
+                </div>
+
+                {error && (
+                  <div className="mt-4 rounded-[14px] bg-[#fff1f1] px-4 py-3 text-sm leading-6 text-[#a74444]">
+                    {error}
+                  </div>
+                )}
+              </section>
+
+              <section className="flat-card p-5">
+                <div className="mb-4 flex items-center justify-between">
+                  <span className="data-label">Session activity</span>
+                  <span className="h-2 w-2 rounded-full bg-ds-blue" />
+                </div>
+                <div id="session-logs" className="log-panel min-h-[148px] max-h-56 overflow-y-auto">
+                  {logs.length === 0 ? (
+                    <span className="text-[#658ba6]">
+                      Ready when you are. Session updates will appear here.
+                    </span>
+                  ) : (
+                    logs.map((log, index) => <div key={index}>{log}</div>)
+                  )}
+                </div>
+                {txDigest && (
+                  <a
+                    href={`https://suiscan.xyz/testnet/tx/${txDigest}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-4 flex items-center justify-between rounded-[14px] bg-ds-blue-pale px-4 py-3 text-xs font-bold text-ds-ink transition hover:bg-ds-blue-soft"
+                  >
+                    View funding transaction
+                    <span className="font-mono">↗</span>
+                  </a>
+                )}
+              </section>
+            </div>
+
+            <div className="space-y-6">
+              {session ? (
+                <>
+                  <section className="soft-card p-6 sm:p-8">
+                    <SessionQR sid={session.sid} proxyUrl={proxyUrl} />
+                  </section>
+                  <section className="soft-card p-6 sm:p-8">
+                    <LiveStatus
+                      sid={session.sid}
+                      ephemeralAddress={session.ephemeralAddress}
+                      proxyUrl={proxyUrl}
+                    />
+                  </section>
+                </>
+              ) : (
+                <section className="soft-card relative min-h-[520px] overflow-hidden p-8">
+                  <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-ds-blue via-[#9ad2ff] to-ds-coral" />
+                  <div className="flex min-h-[450px] flex-col items-center justify-center text-center">
+                    <div className="device-shell max-w-[280px] p-4">
+                      <div className="device-screen aspect-[5/3] grid place-items-center">
+                        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#75b7e5]">
+                          Waiting to pair
+                        </span>
+                      </div>
+                      <div className="device-hinge my-2 h-3" />
+                      <div className="device-screen aspect-[4/2.2] grid place-items-center">
+                        <div className="grid h-10 w-10 place-items-center rounded-full border border-[#32536b] font-mono text-lg text-[#77b8e5]">
+                          +
+                        </div>
+                      </div>
+                    </div>
+                    <h2 className="mt-8 text-2xl font-extrabold tracking-[-0.04em] text-ds-ink">
+                      Your pairing code appears here.
+                    </h2>
+                    <p className="mt-3 max-w-sm text-sm leading-6 text-ds-muted">
+                      {DUMMY_MODE
+                        ? 'Create the session on the left, then enter its local connection details on your console.'
+                        : 'Create the session on the left, approve it in your wallet, then open DeepDS on your console.'}
+                    </p>
+                  </div>
+                </section>
               )}
-            </div>
-          </div>
 
-          {/* Tx link */}
-          {txDigest && (
-            <div className="ds-panel p-3 text-xs">
-              <div className="ds-label">DELEGATION TX</div>
-              <a
-                href={`https://suiscan.xyz/testnet/tx/${txDigest}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-ds-green hover:underline font-mono break-all"
-              >
-                {txDigest.slice(0, 20)}... ↗
-              </a>
+              <section className="flat-card p-6">
+                <p className="eyebrow">What happens next</p>
+                <div className="mt-5 grid gap-4 sm:grid-cols-3">
+                  {[
+                    [
+                      DUMMY_MODE ? 'Allocate' : 'Fund',
+                      DUMMY_MODE
+                        ? 'The proxy creates your virtual dUSDC balance.'
+                        : 'A temporary wallet receives your chosen allowance.',
+                    ],
+                    ['Pair', 'The 3DS connects using the QR session details.'],
+                    [
+                      'Tap',
+                      DUMMY_MODE
+                        ? 'UP or DOWN returns a mock fill and digest.'
+                        : 'UP or DOWN becomes a Predict transaction.',
+                    ],
+                  ].map(([title, copy]) => (
+                    <div key={title}>
+                      <h3 className="text-sm font-extrabold text-ds-ink">{title}</h3>
+                      <p className="mt-2 text-xs leading-5 text-ds-muted">{copy}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
             </div>
-          )}
-        </div>
-
-        {/* RIGHT: QR + Live status */}
-        <div className="space-y-4">
-          {session ? (
-            <>
-              <div className="ds-panel p-4">
-                <SessionQR sid={session.sid} proxyUrl={proxyUrl} />
-              </div>
-              <div className="ds-panel p-4">
-                <LiveStatus
-                  sid={session.sid}
-                  ephemeralAddress={session.ephemeralAddress}
-                  proxyUrl={proxyUrl}
-                />
-              </div>
-            </>
-          ) : (
-            <div className="ds-panel p-8 flex flex-col items-center justify-center min-h-[300px] text-center">
-              <div className="text-6xl mb-4 opacity-30">📷</div>
-              <div className="text-green-800 text-sm">
-                Create a session to generate
-                <br />
-                the QR code for your 3DS
-              </div>
-            </div>
-          )}
-
-          {/* How it works */}
-          <div className="ds-panel p-4 text-xs text-green-800 space-y-2">
-            <div className="ds-title text-xs mb-2">HOW IT WORKS</div>
-            {[
-              '1. Browser generates temporary Ed25519 keypair',
-              '2. Keypair registered with proxy (in-memory only)',
-              '3. Wallet sends limited SUI + dUSDC allowance',
-              '4. Proxy creates an ephemeral PredictManager',
-              '5. 3DS scans QR → connects to proxy',
-              '6. UP/DOWN executes on DeepBook Predict testnet',
-            ].map((step) => (
-              <div key={step} className="leading-relaxed">
-                {step}
-              </div>
-            ))}
           </div>
         </div>
       </div>

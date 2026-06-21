@@ -1,204 +1,258 @@
-@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ============================================================
-   DeepDS — Retro Cyberpunk Terminal Theme
-   Phosphor green on black, CRT scanlines, Nintendo DS vibes
-   ============================================================ */
-
 :root {
-  --ds-green: #00ff41;
-  --ds-green-dim: #00cc33;
-  --ds-green-dark: #001a00;
-  --ds-black: #0a0a0f;
-  --ds-gray: #1a1a2e;
-  --ds-border: #0f2d0f;
-  --ds-glow: 0 0 10px rgba(0, 255, 65, 0.4), 0 0 30px rgba(0, 255, 65, 0.2);
-  --ds-glow-strong: 0 0 15px rgba(0, 255, 65, 0.8), 0 0 40px rgba(0, 255, 65, 0.4);
+  --sui-blue: #4da2ff;
+  --sui-blue-soft: #dff1ff;
+  --sui-blue-pale: #f3faff;
+  --ink: #102a43;
+  --muted: #627d98;
+  --line: #d8e7f1;
+  --paper: #fbfdff;
+  --shell: #edf3f7;
+  --screen: #071b2d;
+  --coral: #ff6b6b;
+  --green: #28b888;
+  --shadow: 0 20px 60px rgba(44, 87, 122, 0.12);
 }
 
 * {
   box-sizing: border-box;
 }
 
-html,
+html {
+  scroll-behavior: smooth;
+}
+
 body {
-  background-color: var(--ds-black);
-  color: var(--ds-green);
-  font-family: 'Share Tech Mono', 'Courier New', monospace;
-  margin: 0;
-  padding: 0;
   min-height: 100vh;
-  overflow-x: hidden;
+  margin: 0;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 12% 2%, rgba(77, 162, 255, 0.12), transparent 26rem),
+    linear-gradient(180deg, #ffffff 0%, var(--sui-blue-pale) 100%);
+  font-family: 'Manrope', sans-serif;
+  text-rendering: optimizeLegibility;
 }
 
-/* CRT Scanline overlay */
-body::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    rgba(0, 0, 0, 0.03) 2px,
-    rgba(0, 0, 0, 0.03) 4px
-  );
-  pointer-events: none;
-  z-index: 9999;
+button,
+input {
+  font: inherit;
 }
 
-/* Grid background */
-body::after {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-image: linear-gradient(rgba(0, 255, 65, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 255, 65, 0.02) 1px, transparent 1px);
-  background-size: 40px 40px;
-  pointer-events: none;
-  z-index: 0;
+button {
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* ---- Utility Classes ---- */
-@layer components {
-  .ds-panel {
-    @apply border border-ds-border bg-ds-gray/50 backdrop-blur-sm rounded-sm;
-    box-shadow: inset 0 0 30px rgba(0, 255, 65, 0.03), 0 0 1px #00ff41;
-  }
-
-  .ds-button {
-    @apply px-6 py-3 border border-ds-green text-ds-green font-mono uppercase tracking-widest
-           text-sm transition-all duration-200 cursor-pointer;
-    background: transparent;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .ds-button::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(0, 255, 65, 0.1), transparent);
-    transition: left 0.3s;
-  }
-
-  .ds-button:hover::before {
-    left: 100%;
-  }
-
-  .ds-button:hover {
-    background: rgba(0, 255, 65, 0.08);
-    box-shadow: var(--ds-glow);
-    text-shadow: 0 0 8px var(--ds-green);
-  }
-
-  .ds-button:active {
-    background: rgba(0, 255, 65, 0.2);
-    transform: scale(0.98);
-  }
-
-  .ds-button-primary {
-    @apply ds-button;
-    background: rgba(0, 255, 65, 0.1);
-    box-shadow: var(--ds-glow);
-  }
-
-  .ds-button-primary:hover {
-    background: rgba(0, 255, 65, 0.2);
-    box-shadow: var(--ds-glow-strong);
-  }
-
-  .ds-button-danger {
-    @apply px-6 py-3 border border-red-500 text-red-400 font-mono uppercase tracking-widest
-           text-sm transition-all duration-200 cursor-pointer;
-    background: transparent;
-  }
-
-  .ds-button-danger:hover {
-    background: rgba(255, 45, 85, 0.1);
-    box-shadow: 0 0 10px rgba(255, 45, 85, 0.4);
-  }
-
-  .ds-input {
-    @apply bg-transparent border border-ds-border text-ds-green font-mono
-           px-3 py-2 w-full outline-none text-sm;
-  }
-
-  .ds-input:focus {
-    border-color: var(--ds-green);
-    box-shadow: var(--ds-glow);
-  }
-
-  .ds-label {
-    @apply text-xs text-green-700 uppercase tracking-widest mb-1 block;
-  }
-
-  .ds-value {
-    @apply text-ds-green font-mono;
-    text-shadow: 0 0 6px rgba(0, 255, 65, 0.6);
-  }
-
-  .ds-title {
-    @apply text-ds-green font-mono uppercase tracking-[0.3em];
-    text-shadow: 0 0 20px rgba(0, 255, 65, 0.8), 0 0 40px rgba(0, 255, 65, 0.4);
-  }
-
-  .ds-divider {
-    @apply border-t border-ds-border my-4;
-  }
-
-  .ds-tag {
-    @apply text-xs px-2 py-0.5 border border-ds-green/30 text-ds-green-dim rounded-none;
-    background: rgba(0, 255, 65, 0.05);
-  }
-
-  .ds-cursor::after {
-    content: '_';
-    animation: blink 1s step-start infinite;
-  }
-
-  .ds-badge-green {
-    @apply text-xs px-2 py-0.5 bg-green-900/40 text-green-400 border border-green-800;
-  }
-
-  .ds-badge-red {
-    @apply text-xs px-2 py-0.5 bg-red-900/40 text-red-400 border border-red-800;
-  }
-
-  .ds-status-dot {
-    @apply inline-block w-2 h-2 rounded-full bg-ds-green mr-2;
-    animation: pulseGreen 2s ease-in-out infinite;
-    box-shadow: 0 0 6px var(--ds-green);
-  }
-}
-
-/* Scrollbar */
-::-webkit-scrollbar {
-  width: 4px;
-}
-::-webkit-scrollbar-track {
-  background: var(--ds-black);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--ds-green-dark);
-  border: 1px solid var(--ds-green-dim);
-}
-
-/* Selection */
 ::selection {
-  background: rgba(0, 255, 65, 0.2);
-  color: var(--ds-green);
+  color: var(--ink);
+  background: #bde2ff;
+}
+
+@layer components {
+  .site-shell {
+    @apply mx-auto w-full max-w-[1180px] px-5 sm:px-8;
+  }
+
+  .site-header {
+    @apply flex h-20 items-center justify-between;
+  }
+
+  .brand {
+    @apply inline-flex items-center gap-3 font-extrabold tracking-[-0.04em] text-ds-ink;
+  }
+
+  .brand-mark {
+    @apply relative grid h-9 w-12 place-items-center rounded-[12px] bg-ds-ink text-xs font-extrabold tracking-[-0.08em] text-white;
+    box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18);
+  }
+
+  .brand-mark::before,
+  .brand-mark::after {
+    content: '';
+    @apply absolute h-1.5 w-1.5 rounded-full;
+    top: 7px;
+  }
+
+  .brand-mark::before {
+    left: 8px;
+    background: var(--sui-blue);
+  }
+
+  .brand-mark::after {
+    right: 8px;
+    background: var(--coral);
+  }
+
+  .eyebrow {
+    @apply font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-ds-blue;
+  }
+
+  .display-title {
+    @apply text-[clamp(3.25rem,8vw,7.25rem)] font-extrabold leading-[0.88] tracking-[-0.075em] text-ds-ink;
+  }
+
+  .section-title {
+    @apply text-3xl font-extrabold leading-tight tracking-[-0.045em] text-ds-ink sm:text-4xl;
+  }
+
+  .body-copy {
+    @apply text-base leading-7 text-ds-muted sm:text-lg;
+  }
+
+  .soft-card {
+    @apply rounded-[28px] border border-white bg-white/85;
+    box-shadow: var(--shadow);
+  }
+
+  .flat-card {
+    @apply rounded-[22px] border border-ds-line bg-white;
+  }
+
+  .primary-button {
+    @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-ds-blue px-6 py-3 text-sm font-bold text-white transition duration-200;
+    box-shadow: 0 8px 24px rgba(77, 162, 255, 0.28), inset 0 -2px 0 rgba(0, 45, 92, 0.16);
+  }
+
+  .primary-button:hover {
+    @apply -translate-y-0.5 bg-[#338fe9];
+    box-shadow: 0 12px 28px rgba(77, 162, 255, 0.34), inset 0 -2px 0 rgba(0, 45, 92, 0.16);
+  }
+
+  .secondary-button {
+    @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-ds-line bg-white px-6 py-3 text-sm font-bold text-ds-ink transition duration-200;
+  }
+
+  .secondary-button:hover {
+    @apply -translate-y-0.5 border-ds-blue bg-ds-blue-pale;
+  }
+
+  .danger-button {
+    @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#fff0f0] px-6 py-3 text-sm font-bold text-[#c94b4b] transition duration-200;
+  }
+
+  .danger-button:hover {
+    @apply bg-[#ffe4e4];
+  }
+
+  .form-label {
+    @apply mb-2 block text-sm font-bold text-ds-ink;
+  }
+
+  .form-input {
+    @apply h-12 w-full rounded-[14px] border border-ds-line bg-ds-blue-pale px-4 text-sm text-ds-ink outline-none transition placeholder:text-[#9aafbf];
+  }
+
+  .form-input:focus {
+    @apply border-ds-blue bg-white;
+    box-shadow: 0 0 0 4px rgba(77, 162, 255, 0.12);
+  }
+
+  .data-label {
+    @apply font-mono text-[10px] font-medium uppercase tracking-[0.13em] text-ds-muted;
+  }
+
+  .data-value {
+    @apply font-mono text-sm font-medium text-ds-ink;
+  }
+
+  .status-dot {
+    @apply inline-block h-2 w-2 rounded-full bg-ds-green;
+    box-shadow: 0 0 0 4px rgba(40, 184, 136, 0.12);
+  }
+
+  .device-shell {
+    @apply relative mx-auto w-full max-w-[520px] rounded-[42px] border border-[#cfdae2] bg-ds-shell p-5 sm:p-7;
+    box-shadow:
+      0 30px 80px rgba(32, 69, 96, 0.2),
+      inset 0 2px 0 white,
+      inset 0 -5px 0 #d8e1e7;
+  }
+
+  .device-screen {
+    @apply relative overflow-hidden rounded-[20px] border-[8px] border-ds-ink bg-ds-screen;
+    box-shadow: inset 0 0 0 1px #284c67;
+  }
+
+  .device-hinge {
+    @apply relative my-3 h-4 rounded-full bg-[#d4dee5];
+    box-shadow: inset 0 2px 3px rgba(45, 71, 91, 0.18), 0 1px 0 white;
+  }
+
+  .device-hinge::before,
+  .device-hinge::after {
+    content: '';
+    @apply absolute top-1/2 h-2 w-16 -translate-y-1/2 rounded-full bg-[#b9c8d2];
+  }
+
+  .device-hinge::before {
+    left: 9%;
+  }
+
+  .device-hinge::after {
+    right: 9%;
+  }
+
+  .screen-grid {
+    background-image:
+      linear-gradient(rgba(77, 162, 255, 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(77, 162, 255, 0.08) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  .log-panel {
+    @apply rounded-[18px] bg-ds-screen p-4 font-mono text-xs leading-6 text-[#a9d7f7];
+    box-shadow: inset 0 0 0 1px #1d405b;
+  }
+}
+
+.wallet-kit-button button,
+button[data-dapp-kit] {
+  border-radius: 999px !important;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .device-shell {
+    animation: device-arrive 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  .hero-copy {
+    animation: copy-arrive 600ms 100ms ease-out both;
+  }
+}
+
+@keyframes device-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(22px) rotate(1deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(0);
+  }
+}
+
+@keyframes copy-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { Transaction } from '@mysten/sui/transactions';
-import { getSession } from '../session.js';
+import { getSession, spendMockBalance } from '../session.js';
 import {
   CLOCK_ID,
   DUSDC_TYPE,
@@ -12,6 +12,7 @@ import {
 } from '../sui.js';
 import { fetchActiveMarket } from './market.js';
 import type { TradeResponse } from '../types.js';
+import { DUMMY_MODE, mockId } from '../config.js';
 
 const router = Router();
 const DEFAULT_QUANTITY = 1_000_000n;
@@ -42,6 +43,19 @@ router.post('/', async (req: Request, res: Response) => {
 
   try {
     const market = await fetchActiveMarket();
+
+    if (DUMMY_MODE) {
+      const price = action === 'UP' ? market.up : market.down;
+      const cost = BigInt(Math.max(1, Math.round(price * Number(quantity))));
+      const remaining = spendMockBalance(sid, cost);
+      const digest = mockId(`mock_${action.toLowerCase()}`);
+      console.log(
+        `[dummy-trade] ${action} qty=${quantity} cost=${cost} remaining=${remaining} digest=${digest}`,
+      );
+      res.json({ ok: 1, digest, mode: 'dummy', cost: cost.toString() });
+      return;
+    }
+
     const keypair = keypairFromSecret(session.keypairSecretKey);
     const tx = new Transaction();
     tx.setSender(session.ephemeralAddress);

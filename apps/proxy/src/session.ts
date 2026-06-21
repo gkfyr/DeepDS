@@ -18,11 +18,13 @@ export function createSession(
   keypairSecretKey: string,
   ephemeralAddress: string,
   userAddress: string,
+  mockBalance?: bigint,
 ): void {
   const now = Date.now();
   store.set(sid, {
     keypairSecretKey,
     ephemeralAddress,
+    mockBalance,
     userAddress,
     createdAt: now,
     expiresAt: now + SESSION_TTL_MS,
@@ -34,6 +36,18 @@ export function setSessionManager(sid: string, managerId: string): void {
   const session = getSession(sid);
   if (!session) throw new Error('Session not found or expired');
   session.managerId = managerId;
+}
+
+export function spendMockBalance(sid: string, amount: bigint): bigint {
+  const session = getSession(sid);
+  if (!session || session.mockBalance === undefined) {
+    throw new Error('Mock session not found');
+  }
+  if (session.mockBalance < amount) {
+    throw new Error('Mock dUSDC allowance exhausted');
+  }
+  session.mockBalance -= amount;
+  return session.mockBalance;
 }
 
 export function getSession(sid: string): EphemeralSession | undefined {

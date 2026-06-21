@@ -1,13 +1,5 @@
 'use client';
 
-/**
- * Session QR Code component.
- * Displays a QR code containing the proxy URL and session ID.
- * The 3DS scans this to authenticate.
- *
- * QR payload: {"url":"http://192.168.x.x:3001","sid":"<uuid>"}
- */
-
 import { QRCodeSVG } from 'qrcode.react';
 
 interface SessionQRProps {
@@ -19,48 +11,49 @@ export function SessionQR({ sid, proxyUrl }: SessionQRProps) {
   const qrPayload = JSON.stringify({ url: proxyUrl, sid });
 
   return (
-    <div className="flex flex-col items-center gap-4">
-      <div className="ds-label text-center">📷 SCAN WITH 3DS CAMERA</div>
+    <div className="flex flex-col items-center text-center">
+      <div className="mb-5">
+        <p className="eyebrow">Pair your console</p>
+        <h2 className="mt-2 text-2xl font-extrabold tracking-[-0.04em] text-ds-ink">
+          Scan with DeepDS
+        </h2>
+      </div>
 
-      {/* QR Code with DS-style border */}
-      <div className="relative p-4 border border-ds-green ds-panel">
-        {/* Corner decorators */}
-        <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-ds-green" />
-        <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-ds-green" />
-        <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-ds-green" />
-        <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-ds-green" />
-
-        <div className="bg-white p-3">
+      <div className="relative rounded-[28px] bg-ds-shell p-5 shadow-inner">
+        <div className="absolute left-3 top-3 h-2 w-2 rounded-full bg-ds-blue" />
+        <div className="absolute right-3 top-3 h-2 w-2 rounded-full bg-ds-coral" />
+        <div className="rounded-[16px] border-[6px] border-ds-ink bg-white p-3">
           <QRCodeSVG
             value={qrPayload}
-            size={200}
+            size={190}
             level="M"
             includeMargin={false}
-            fgColor="#000000"
+            fgColor="#102a43"
             bgColor="#ffffff"
           />
         </div>
       </div>
 
-      {/* Session details */}
-      <div className="w-full space-y-1 text-xs">
-        <div className="flex justify-between">
-          <span className="text-green-700">SESSION ID</span>
-          <span className="text-ds-green font-mono">
-            {sid.slice(0, 8)}...
+      <div className="mt-6 w-full divide-y divide-ds-line rounded-[18px] border border-ds-line text-left">
+        <div className="px-4 py-3">
+          <span className="data-label">Session</span>
+          <span className="mt-2 block break-all font-mono text-[11px] leading-5 text-ds-ink">
+            {sid}
           </span>
         </div>
-        <div className="flex justify-between">
-          <span className="text-green-700">PROXY URL</span>
-          <span className="text-ds-green font-mono text-xs">{proxyUrl}</span>
+        <div className="flex items-center justify-between gap-4 px-4 py-3">
+          <span className="data-label">Proxy</span>
+          <span className="max-w-[210px] truncate font-mono text-[11px] text-ds-ink">
+            {proxyUrl}
+          </span>
         </div>
       </div>
 
-      <p className="text-xs text-green-800 text-center">
-        Point your 3DS camera at this code.
-        <br />
-        DeepDS app will connect automatically.
-      </p>
+      <div className="mt-4 max-w-sm rounded-[14px] bg-ds-blue-pale px-4 py-3 text-left text-xs leading-5 text-ds-muted">
+        <strong className="text-ds-ink">Current 3DS build:</strong> press{' '}
+        <strong className="text-ds-ink">A</strong> on the scan screen, then enter
+        the proxy URL and full session UUID shown above.
+      </div>
     </div>
   );
 }
