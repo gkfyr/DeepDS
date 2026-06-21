@@ -1,0 +1,13 @@
+{
+  "name": "deepds-monorepo",
+  "private": true,
+  "scripts": {
+    "dev:proxy": "pnpm --filter @deepds/proxy dev",
+    "dev:web": "pnpm --filter @deepds/web dev",
+    "build": "pnpm -r build",
+    "install:all": "pnpm install"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}

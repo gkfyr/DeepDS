@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.next/
+out/
+*.3dsx
+*.elf
+*.o
+*.d
+.env
+.env.local
+.env*.local
+*.log
+.DS_Store
+Thumbs.db

@@ -1,0 +1,204 @@
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   DeepDS — Retro Cyberpunk Terminal Theme
+   Phosphor green on black, CRT scanlines, Nintendo DS vibes
+   ============================================================ */
+
+:root {
+  --ds-green: #00ff41;
+  --ds-green-dim: #00cc33;
+  --ds-green-dark: #001a00;
+  --ds-black: #0a0a0f;
+  --ds-gray: #1a1a2e;
+  --ds-border: #0f2d0f;
+  --ds-glow: 0 0 10px rgba(0, 255, 65, 0.4), 0 0 30px rgba(0, 255, 65, 0.2);
+  --ds-glow-strong: 0 0 15px rgba(0, 255, 65, 0.8), 0 0 40px rgba(0, 255, 65, 0.4);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background-color: var(--ds-black);
+  color: var(--ds-green);
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* CRT Scanline overlay */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.03) 2px,
+    rgba(0, 0, 0, 0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* Grid background */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: linear-gradient(rgba(0, 255, 65, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 255, 65, 0.02) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ---- Utility Classes ---- */
+@layer components {
+  .ds-panel {
+    @apply border border-ds-border bg-ds-gray/50 backdrop-blur-sm rounded-sm;
+    box-shadow: inset 0 0 30px rgba(0, 255, 65, 0.03), 0 0 1px #00ff41;
+  }
+
+  .ds-button {
+    @apply px-6 py-3 border border-ds-green text-ds-green font-mono uppercase tracking-widest
+           text-sm transition-all duration-200 cursor-pointer;
+    background: transparent;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .ds-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(0, 255, 65, 0.1), transparent);
+    transition: left 0.3s;
+  }
+
+  .ds-button:hover::before {
+    left: 100%;
+  }
+
+  .ds-button:hover {
+    background: rgba(0, 255, 65, 0.08);
+    box-shadow: var(--ds-glow);
+    text-shadow: 0 0 8px var(--ds-green);
+  }
+
+  .ds-button:active {
+    background: rgba(0, 255, 65, 0.2);
+    transform: scale(0.98);
+  }
+
+  .ds-button-primary {
+    @apply ds-button;
+    background: rgba(0, 255, 65, 0.1);
+    box-shadow: var(--ds-glow);
+  }
+
+  .ds-button-primary:hover {
+    background: rgba(0, 255, 65, 0.2);
+    box-shadow: var(--ds-glow-strong);
+  }
+
+  .ds-button-danger {
+    @apply px-6 py-3 border border-red-500 text-red-400 font-mono uppercase tracking-widest
+           text-sm transition-all duration-200 cursor-pointer;
+    background: transparent;
+  }
+
+  .ds-button-danger:hover {
+    background: rgba(255, 45, 85, 0.1);
+    box-shadow: 0 0 10px rgba(255, 45, 85, 0.4);
+  }
+
+  .ds-input {
+    @apply bg-transparent border border-ds-border text-ds-green font-mono
+           px-3 py-2 w-full outline-none text-sm;
+  }
+
+  .ds-input:focus {
+    border-color: var(--ds-green);
+    box-shadow: var(--ds-glow);
+  }
+
+  .ds-label {
+    @apply text-xs text-green-700 uppercase tracking-widest mb-1 block;
+  }
+
+  .ds-value {
+    @apply text-ds-green font-mono;
+    text-shadow: 0 0 6px rgba(0, 255, 65, 0.6);
+  }
+
+  .ds-title {
+    @apply text-ds-green font-mono uppercase tracking-[0.3em];
+    text-shadow: 0 0 20px rgba(0, 255, 65, 0.8), 0 0 40px rgba(0, 255, 65, 0.4);
+  }
+
+  .ds-divider {
+    @apply border-t border-ds-border my-4;
+  }
+
+  .ds-tag {
+    @apply text-xs px-2 py-0.5 border border-ds-green/30 text-ds-green-dim rounded-none;
+    background: rgba(0, 255, 65, 0.05);
+  }
+
+  .ds-cursor::after {
+    content: '_';
+    animation: blink 1s step-start infinite;
+  }
+
+  .ds-badge-green {
+    @apply text-xs px-2 py-0.5 bg-green-900/40 text-green-400 border border-green-800;
+  }
+
+  .ds-badge-red {
+    @apply text-xs px-2 py-0.5 bg-red-900/40 text-red-400 border border-red-800;
+  }
+
+  .ds-status-dot {
+    @apply inline-block w-2 h-2 rounded-full bg-ds-green mr-2;
+    animation: pulseGreen 2s ease-in-out infinite;
+    box-shadow: 0 0 6px var(--ds-green);
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: var(--ds-black);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--ds-green-dark);
+  border: 1px solid var(--ds-green-dim);
+}
+
+/* Selection */
+::selection {
+  background: rgba(0, 255, 65, 0.2);
+  color: var(--ds-green);
+}
