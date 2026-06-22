@@ -1,0 +1,16 @@
+.git
+.github
+.agents
+.codex
+node_modules
+**/node_modules
+**/.next
+**/dist
+apps/3ds/build
+apps/3ds/*.3dsx
+apps/3ds/*.elf
+apps/3ds/*.smdh
+.env
+.env.*
+*.log
+.DS_Store

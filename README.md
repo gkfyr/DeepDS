@@ -57,6 +57,15 @@ pnpm dev:web
 
 Open `http://localhost:3000`, connect a testnet wallet, choose a dUSDC session allowance, and create the session. For a real 3DS, set the proxy URL in the web UI to the computer's LAN address, such as `http://192.168.1.5:3001`.
 
+## Deploy
+
+- Deploy `apps/web` to Vercel.
+- Deploy the root `Dockerfile` to a Koyeb Web Service.
+- Configure Vercel's `NEXT_PUBLIC_PROXY_URL` with the HTTPS Koyeb URL.
+
+The full Koyeb setup, environment variables, health check, and free-instance
+limitations are documented in [KOYEB_DEPLOY.md](./KOYEB_DEPLOY.md).
+
 The connected wallet must already hold dUSDC. The official track instructions provide the request form: <https://tally.so/r/Xx102L>.
 
 ## Proxy smoke tests

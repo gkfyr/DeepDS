@@ -1,6 +1,10 @@
 {
   "name": "deepds-monorepo",
   "private": true,
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev:proxy": "pnpm --filter @deepds/proxy dev",
     "dev:web": "pnpm --filter @deepds/web dev",

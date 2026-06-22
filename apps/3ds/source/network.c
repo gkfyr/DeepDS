@@ -18,6 +18,32 @@
 #define SOC_BUFFER_SIZE  (1024 * 256)  /* 256 KB */
 static u32* soc_buf = NULL;
 
+/**
+ * Koyeb and other public hosts expose HTTPS-only endpoints.
+ *
+ * The 3DS root CA store is old, so certificate verification is disabled for
+ * this hackathon PoC. Traffic is still encrypted, but this is not suitable for
+ * a production custody service.
+ */
+static Result configure_context(httpcContext* ctx, const char* url) {
+    Result rc = httpcAddRequestHeaderField(
+        ctx,
+        "User-Agent",
+        "DeepDS-3DS/0.2"
+    );
+    if (R_FAILED(rc)) return rc;
+
+    rc = httpcSetKeepAlive(ctx, HTTPC_KEEPALIVE_ENABLED);
+    if (R_FAILED(rc)) return rc;
+
+    if (strncmp(url, "https://", 8) == 0) {
+        rc = httpcSetSSLOpt(ctx, SSLCOPT_DisableVerify);
+        if (R_FAILED(rc)) return rc;
+    }
+
+    return 0;
+}
+
 int network_init(void) {
     soc_buf = (u32*)memalign(0x1000, SOC_BUFFER_SIZE);
     if (!soc_buf) return -1;
@@ -80,8 +106,11 @@ int http_get(const char* url, char* buf, size_t buf_sz) {
     Result rc = httpcOpenContext(&ctx, HTTPC_METHOD_GET, url, 0);
     if (R_FAILED(rc)) return -1;
 
-    /* Set user agent so server knows it's the 3DS */
-    httpcAddRequestHeaderField(&ctx, "User-Agent", "DeepDS-3DS/0.1");
+    rc = configure_context(&ctx, url);
+    if (R_FAILED(rc)) {
+        httpcCloseContext(&ctx);
+        return -1;
+    }
 
     rc = httpcBeginRequest(&ctx);
     if (R_FAILED(rc)) {
@@ -101,12 +130,21 @@ int http_post(const char* url, const char* body, char* buf, size_t buf_sz) {
     Result rc = httpcOpenContext(&ctx, HTTPC_METHOD_POST, url, 0);
     if (R_FAILED(rc)) return -1;
 
-    httpcAddRequestHeaderField(&ctx, "User-Agent", "DeepDS-3DS/0.1");
-    httpcAddRequestHeaderField(
+    rc = configure_context(&ctx, url);
+    if (R_FAILED(rc)) {
+        httpcCloseContext(&ctx);
+        return -1;
+    }
+
+    rc = httpcAddRequestHeaderField(
         &ctx,
         "Content-Type",
         "application/x-www-form-urlencoded"
     );
+    if (R_FAILED(rc)) {
+        httpcCloseContext(&ctx);
+        return -1;
+    }
 
     if (body && strlen(body) > 0) {
         rc = httpcAddPostDataRaw(
