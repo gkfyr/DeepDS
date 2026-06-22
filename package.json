@@ -10,6 +10,7 @@
     "dev:web": "pnpm --filter @deepds/web dev",
     "dev:dummy:proxy": "DUMMY_MODE=true pnpm --filter @deepds/proxy dev",
     "dev:dummy:web": "NEXT_PUBLIC_DUMMY_MODE=true pnpm --filter @deepds/web dev",
+    "host:local": "bash scripts/host-local.sh",
     "build": "pnpm -r build",
     "install:all": "pnpm install"
   },

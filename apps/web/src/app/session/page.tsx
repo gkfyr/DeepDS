@@ -266,18 +266,18 @@ export default function SessionPage() {
 
                 <div>
                   <label htmlFor="proxy-url" className="form-label">
-                    Local proxy address
+                    Server address
                   </label>
                   <input
                     id="proxy-url"
                     className="form-input"
                     value={proxyUrl}
                     onChange={(e) => setProxyUrl(e.target.value)}
-                    placeholder="http://192.168.1.x:3001"
+                    placeholder="https://example.trycloudflare.com"
                     disabled={step !== 'idle' && step !== 'error'}
                   />
                   <p className="mt-2 text-xs leading-5 text-ds-muted">
-                    Use this computer&apos;s LAN address so your 3DS can reach it.
+                    Paste the public HTTPS tunnel URL shown by the host command.
                   </p>
                 </div>
 

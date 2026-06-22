@@ -21,7 +21,14 @@ const router = Router();
 router.get('/:sid', async (req: Request, res: Response) => {
   const { sid } = req.params;
 
-  const session = getSession(sid);
+  let session;
+  try {
+    session = await getSession(sid);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(503).json({ error: message });
+    return;
+  }
   if (!session) {
     res.status(401).json({ error: 'Session not found or expired' });
     return;

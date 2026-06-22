@@ -35,7 +35,14 @@ router.post('/', async (req: Request, res: Response) => {
     return;
   }
 
-  const session = getSession(sid);
+  let session;
+  try {
+    session = await getSession(sid);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(503).json({ ok: 0, error: message });
+    return;
+  }
   if (!session?.managerId) {
     res.status(401).json({ ok: 0, error: 'Session is not initialized' });
     return;
@@ -47,7 +54,7 @@ router.post('/', async (req: Request, res: Response) => {
     if (DUMMY_MODE) {
       const price = action === 'UP' ? market.up : market.down;
       const cost = BigInt(Math.max(1, Math.round(price * Number(quantity))));
-      const remaining = spendMockBalance(sid, cost);
+      const remaining = await spendMockBalance(sid, cost);
       const digest = mockId(`mock_${action.toLowerCase()}`);
       console.log(
         `[dummy-trade] ${action} qty=${quantity} cost=${cost} remaining=${remaining} digest=${digest}`,

@@ -11,6 +11,7 @@ import {
   createSession,
   deleteSession,
   getSession,
+  isSessionStorageConfigurationError,
   setSessionManager,
 } from '../session.js';
 import {
@@ -24,7 +25,7 @@ const router = Router();
 
 // POST /api/session
 // Body: { sid, privkey, ephemeralAddress, userAddress }
-router.post('/', (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response) => {
   const { sid, privkey, ephemeralAddress, userAddress, allowance } =
     req.body as SessionCreateRequest;
 
@@ -48,7 +49,7 @@ router.post('/', (req: Request, res: Response) => {
     const mockBalance = DUMMY_MODE
       ? BigInt(Math.max(1, Math.round(Number(allowance ?? '5') * 1_000_000)))
       : undefined;
-    createSession(
+    await createSession(
       sid,
       privkey,
       ephemeralAddress,
@@ -58,12 +59,26 @@ router.post('/', (req: Request, res: Response) => {
     res.json({ ok: 1, sid, expires_in: 3600, mode: DUMMY_MODE ? 'dummy' : 'live' });
   } catch (err) {
     console.error('[session] Create error:', err);
+    if (isSessionStorageConfigurationError(err)) {
+      res.status(503).json({
+        ok: 0,
+        error: err instanceof Error ? err.message : 'Session storage unavailable',
+      });
+      return;
+    }
     res.status(500).json({ ok: 0, error: 'Internal error' });
   }
 });
 
 router.post('/:sid/initialize', async (req: Request, res: Response) => {
-  const session = getSession(req.params.sid);
+  let session;
+  try {
+    session = await getSession(req.params.sid);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(503).json({ ok: 0, error: message });
+    return;
+  }
   if (!session) {
     res.status(404).json({ ok: 0, error: 'Session not found or expired' });
     return;
@@ -76,7 +91,7 @@ router.post('/:sid/initialize', async (req: Request, res: Response) => {
   try {
     if (DUMMY_MODE) {
       const managerId = mockId('mock_manager');
-      setSessionManager(req.params.sid, managerId);
+      await setSessionManager(req.params.sid, managerId);
       res.json({
         ok: 1,
         managerId,
@@ -89,7 +104,7 @@ router.post('/:sid/initialize', async (req: Request, res: Response) => {
     const result = await createAndFundPredictManager(
       keypairFromSecret(session.keypairSecretKey),
     );
-    setSessionManager(req.params.sid, result.managerId);
+    await setSessionManager(req.params.sid, result.managerId);
     res.json({ ok: 1, managerId: result.managerId, digest: result.digest });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -98,16 +113,28 @@ router.post('/:sid/initialize', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/session/:sid
-router.delete('/:sid', (req: Request, res: Response) => {
+router.delete('/:sid', async (req: Request, res: Response) => {
   const { sid } = req.params;
-  const existed = deleteSession(sid);
-  res.json({ ok: 1, deleted: existed });
+  try {
+    const existed = await deleteSession(sid);
+    res.json({ ok: 1, deleted: existed });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(503).json({ ok: 0, error: message });
+  }
 });
 
 // GET /api/session/:sid (debug only)
-router.get('/:sid', (req: Request, res: Response) => {
+router.get('/:sid', async (req: Request, res: Response) => {
   const { sid } = req.params;
-  const session = getSession(sid);
+  let session;
+  try {
+    session = await getSession(sid);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(503).json({ ok: 0, error: message });
+    return;
+  }
   if (!session) {
     res.status(404).json({ ok: 0, error: 'Session not found or expired' });
     return;

@@ -66,6 +66,13 @@ Open `http://localhost:3000`, connect a testnet wallet, choose a dUSDC session a
 The full Koyeb setup, environment variables, health check, and free-instance
 limitations are documented in [KOYEB_DEPLOY.md](./KOYEB_DEPLOY.md).
 
+To host the proxy from your own Mac for free, run `pnpm host:local` and paste
+the generated Cloudflare Tunnel URL into the session page. See
+[LOCAL_HOSTING.md](./LOCAL_HOSTING.md) for setup and demo limitations.
+
+The Express proxy can also run on Vercel Functions with Upstash Redis-backed
+sessions. See [VERCEL_PROXY_DEPLOY.md](./VERCEL_PROXY_DEPLOY.md).
+
 The connected wallet must already hold dUSDC. The official track instructions provide the request form: <https://tally.so/r/Xx102L>.
 
 ## Proxy smoke tests
