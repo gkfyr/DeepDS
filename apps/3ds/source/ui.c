@@ -271,7 +271,7 @@ static void draw_action_button(
 static void draw_pairing_bottom(const char* message) {
     draw_text("Connect DeepDS", 18, 54, 0.72f, COL_INK);
     draw_text("Keep the full QR and white border visible.", 18, 80, 0.35f, COL_MUTED);
-    draw_text("QR CAMERA v0.7", 220, 54, 0.25f, COL_BLUE);
+    draw_text("QR CAMERA v0.8", 220, 54, 0.25f, COL_BLUE);
 
     draw_card(18, 98, 284, 75, COL_SURFACE, COL_BLUE);
     draw_rect(34, 114, 28, 3, COL_BLUE);

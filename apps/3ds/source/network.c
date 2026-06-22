@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <malloc.h>
 #include <3ds.h>
+#include "gts_wr1_cert.h"
 
 /* SOC buffer — required for socket operations on 3DS */
 #define SOC_BUFFER_SIZE  (1024 * 256)  /* 256 KB */
@@ -47,6 +48,19 @@ static Result configure_context(httpcContext* ctx, const char* url) {
      * 0xD8A0A03C (server certificate verification failed).
      */
     if (strncmp(url, "https://", 8) == 0) {
+        /*
+         * The stock 3DS CA store predates Google Trust Services, which signs
+         * Vercel's current certificates. Trust the WR1 intermediate shipped
+         * with the app so real hardware can validate *.vercel.app.
+         */
+        rc = httpcAddTrustedRootCA(
+            ctx,
+            deepds_gts_wr1_der,
+            deepds_gts_wr1_der_len
+        );
+        if (R_FAILED(rc)) return rc;
+
+        /* Keep this as a fallback for old HTTP service implementations. */
         rc = httpcSetSSLOpt(ctx, SSLCOPT_DisableVerify);
         if (R_FAILED(rc)) return rc;
     }
