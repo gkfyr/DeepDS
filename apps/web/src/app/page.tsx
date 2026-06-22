@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit-react';
 import { Brand } from '../components/Brand';
+import { WalletButton } from '../components/WalletButton';
 
 const DUMMY_MODE = process.env.NEXT_PUBLIC_DUMMY_MODE === 'true';
 
@@ -114,7 +115,7 @@ export default function HomePage() {
             </span>
             {!DUMMY_MODE && (
               <div className="hidden sm:block">
-                <ConnectButton />
+                <WalletButton />
               </div>
             )}
           </div>
@@ -142,7 +143,7 @@ export default function HomePage() {
                 </Link>
               ) : (
                 <div className="flex flex-col items-start gap-2">
-                  <ConnectButton />
+                  <WalletButton />
                   <span className="pl-2 text-xs text-ds-muted">
                     Connect a testnet wallet to begin
                   </span>

@@ -2,21 +2,12 @@
 
 /**
  * Root layout — wraps the app with Sui wallet providers.
- * Uses @mysten/dapp-kit for wallet connection (testnet).
+ * Uses Sui dApp Kit 2.0 for wallet connection (testnet).
  */
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { SuiClientProvider, WalletProvider, createNetworkConfig } from '@mysten/dapp-kit';
-import { getFullnodeUrl } from '@mysten/sui/client';
-import '@mysten/dapp-kit/dist/index.css';
+import { DAppKitProvider } from '@mysten/dapp-kit-react';
 import './globals.css';
-
-const { networkConfig } = createNetworkConfig({
-  testnet: { url: getFullnodeUrl('testnet') },
-  mainnet: { url: getFullnodeUrl('mainnet') },
-});
-
-const queryClient = new QueryClient();
+import { dAppKit } from '../lib/dapp-kit';
 
 export default function RootLayout({
   children,
@@ -34,11 +25,7 @@ export default function RootLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
       <body>
-        <QueryClientProvider client={queryClient}>
-          <SuiClientProvider networks={networkConfig} defaultNetwork="testnet">
-            <WalletProvider autoConnect>{children}</WalletProvider>
-          </SuiClientProvider>
-        </QueryClientProvider>
+        <DAppKitProvider dAppKit={dAppKit}>{children}</DAppKitProvider>
       </body>
     </html>
   );

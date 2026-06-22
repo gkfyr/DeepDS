@@ -121,6 +121,24 @@ button {
     @apply bg-[#ffe4e4];
   }
 
+  .wallet-button {
+    @apply inline-flex min-h-11 items-center justify-center rounded-full border border-ds-line bg-white px-5 text-sm font-bold text-ds-ink transition duration-200 disabled:cursor-wait disabled:opacity-60;
+    box-shadow: 0 8px 22px rgba(44, 87, 122, 0.1);
+  }
+
+  .wallet-button:hover:not(:disabled) {
+    @apply -translate-y-0.5 border-ds-blue bg-ds-blue-pale;
+  }
+
+  .wallet-menu {
+    @apply absolute right-0 top-[calc(100%+0.6rem)] z-50 min-w-56 rounded-[18px] border border-ds-line bg-white p-2 text-left;
+    box-shadow: var(--shadow);
+  }
+
+  .wallet-menu-item {
+    @apply block w-full rounded-[12px] px-3 py-2.5 text-left text-sm font-bold text-ds-ink transition hover:bg-ds-blue-pale disabled:opacity-60;
+  }
+
   .form-label {
     @apply mb-2 block text-sm font-bold text-ds-ink;
   }
@@ -190,11 +208,6 @@ button {
     @apply rounded-[18px] bg-ds-screen p-4 font-mono text-xs leading-6 text-[#a9d7f7];
     box-shadow: inset 0 0 0 1px #1d405b;
   }
-}
-
-.wallet-kit-button button,
-button[data-dapp-kit] {
-  border-radius: 999px !important;
 }
 
 @media (prefers-reduced-motion: no-preference) {

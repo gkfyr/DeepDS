@@ -17,7 +17,11 @@
  */
 
 import { useState } from 'react';
-import { useCurrentAccount, useSignTransaction, useSuiClient } from '@mysten/dapp-kit';
+import {
+  useCurrentAccount,
+  useCurrentClient,
+  useDAppKit,
+} from '@mysten/dapp-kit-react';
 import { Transaction } from '@mysten/sui/transactions';
 import { v4 as uuidv4 } from 'uuid';
 import { generateEphemeralKeypair } from '../../lib/ephemeral';
@@ -58,8 +62,8 @@ const DUMMY_MODE = process.env.NEXT_PUBLIC_DUMMY_MODE === 'true';
 
 export default function SessionPage() {
   const account = useCurrentAccount();
-  const { mutateAsync: signTransaction } = useSignTransaction();
-  const suiClient = useSuiClient();
+  const dAppKit = useDAppKit();
+  const suiClient = useCurrentClient();
 
   const [step, setStep] = useState<Step>('idle');
   const [session, setSession] = useState<SessionState | null>(null);
@@ -159,7 +163,10 @@ export default function SessionPage() {
       addLog('Requesting one wallet signature...');
       addLog(`Funding 0.05 SUI + ${dusdcAllowance} dUSDC allowance`);
 
-      const { bytes, signature } = await signTransaction({ transaction: tx });
+      const { bytes, signature } = await dAppKit.signTransaction({
+        transaction: tx,
+        network: 'testnet',
+      });
 
       addLog('Wallet signed! Submitting to Sui testnet...');
 
