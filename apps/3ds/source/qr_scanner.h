@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <citro2d.h>
+
 #define QR_URL_MAX 128
 #define QR_SID_MAX 37
 
@@ -16,6 +18,14 @@ typedef struct {
     char url[QR_URL_MAX];
     char sid[QR_SID_MAX];
 } QRResult;
+
+typedef struct {
+    unsigned int frames_captured;
+    int qr_candidates;
+    int average_luma;
+    int consecutive_errors;
+    int preview_ready;
+} QRScannerStatus;
 
 /**
  * Initialize the camera for QR scanning.
@@ -36,6 +46,17 @@ void qr_scanner_exit(void);
  * @return 1 if QR decoded, 0 if still scanning, -1 on error
  */
 int qr_scanner_update(QRResult* result);
+
+/**
+ * Return the latest camera frame as a Citro2D image.
+ * The image remains owned by the scanner and is valid until qr_scanner_exit().
+ */
+int qr_scanner_get_preview(C2D_Image* image);
+
+/**
+ * Return lightweight diagnostics for the pairing UI.
+ */
+void qr_scanner_get_status(QRScannerStatus* status);
 
 /**
  * Parse QR payload JSON: {"url":"...","sid":"..."}

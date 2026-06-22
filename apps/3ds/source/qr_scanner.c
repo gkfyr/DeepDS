@@ -17,6 +17,9 @@
 #define QR_FRAME_PIXELS      (QR_FRAME_WIDTH * QR_FRAME_HEIGHT)
 #define QR_FRAME_BYTES       (QR_FRAME_PIXELS * sizeof(u16))
 #define QR_CAPTURE_TIMEOUT   180000000ULL
+#define PREVIEW_TEX_WIDTH    512
+#define PREVIEW_TEX_HEIGHT   256
+#define CAMERA_ERROR_LIMIT   3
 
 static u16* s_camera_frame = NULL;
 static struct quirc* s_decoder = NULL;
@@ -27,6 +30,11 @@ static int s_cam_initialized = 0;
 static int s_camera_activated = 0;
 static int s_capture_started = 0;
 static int s_camera_ready = 0;
+static C3D_Tex s_preview_texture;
+static Tex3DS_SubTexture s_preview_subtexture;
+static C2D_Image s_preview_image;
+static int s_preview_initialized = 0;
+static QRScannerStatus s_status;
 
 /* --------------------------------------------------------
    Simple JSON field extractor
@@ -83,21 +91,86 @@ static int camera_call_ok(Result rc) {
     return R_SUCCEEDED(rc);
 }
 
-static void rgb565_to_grayscale(const u16* source, u8* destination) {
-    for (int i = 0; i < QR_FRAME_PIXELS; i++) {
-        u16 pixel = source[i];
-        u8 red = (u8)((pixel & 0x1f) << 3);
-        u8 green = (u8)(((pixel >> 5) & 0x3f) << 2);
-        u8 blue = (u8)(((pixel >> 11) & 0x1f) << 3);
+/* PICA textures use 8x8 Morton-order tiles. */
+static const u8 s_morton_lut[64] = {
+     0,  1,  4,  5, 16, 17, 20, 21,
+     2,  3,  6,  7, 18, 19, 22, 23,
+     8,  9, 12, 13, 24, 25, 28, 29,
+    10, 11, 14, 15, 26, 27, 30, 31,
+    32, 33, 36, 37, 48, 49, 52, 53,
+    34, 35, 38, 39, 50, 51, 54, 55,
+    40, 41, 44, 45, 56, 57, 60, 61,
+    42, 43, 46, 47, 58, 59, 62, 63
+};
 
-        destination[i] = (u8)(
-            ((u32)red * 77 + (u32)green * 150 + (u32)blue * 29) >> 8
-        );
+static size_t texture_pixel_offset(int x, int y) {
+    int tile_x = x >> 3;
+    int tile_y = y >> 3;
+    int tiles_per_row = PREVIEW_TEX_WIDTH >> 3;
+    int tile_offset = (tile_y * tiles_per_row + tile_x) * 64;
+    int local = (y & 7) * 8 + (x & 7);
+    return (size_t)(tile_offset + s_morton_lut[local]);
+}
+
+static u16 camera_rgb565_to_gpu(u16 pixel) {
+    /* CAM RGB565 stores red in the low bits; GPU_RGB565 expects red high. */
+    return (u16)(
+        (pixel & 0x07e0) |
+        ((pixel & 0x001f) << 11) |
+        ((pixel & 0xf800) >> 11)
+    );
+}
+
+static int rgb565_to_grayscale_and_preview(
+    const u16* source,
+    u8* destination
+) {
+    u16* preview = (u16*)s_preview_texture.data;
+    unsigned long luma_sum = 0;
+
+    for (int y = 0; y < QR_FRAME_HEIGHT; y++) {
+        /*
+         * CAM frames are bottom-up. Flip rows here so both the preview and
+         * quirc see the same upright camera image.
+         */
+        int source_y = QR_FRAME_HEIGHT - 1 - y;
+        for (int x = 0; x < QR_FRAME_WIDTH; x++) {
+            u16 pixel = source[source_y * QR_FRAME_WIDTH + x];
+            u8 red = (u8)((pixel & 0x1f) << 3);
+            u8 green = (u8)(((pixel >> 5) & 0x3f) << 2);
+            u8 blue = (u8)(((pixel >> 11) & 0x1f) << 3);
+            u8 luma = (u8)(
+                ((u32)red * 77 + (u32)green * 150 + (u32)blue * 29) >> 8
+            );
+
+            destination[y * QR_FRAME_WIDTH + x] = luma;
+            preview[texture_pixel_offset(x, y)] =
+                camera_rgb565_to_gpu(pixel);
+            luma_sum += luma;
+        }
     }
+
+    C3D_TexFlush(&s_preview_texture);
+    return (int)(luma_sum / QR_FRAME_PIXELS);
+}
+
+static int restart_capture(void) {
+    if (!s_cam_initialized || !s_camera_activated) return -1;
+
+    if (s_capture_started) {
+        CAMU_StopCapture(PORT_CAM1);
+        s_capture_started = 0;
+    }
+    CAMU_ClearBuffer(PORT_CAM1);
+    if (R_FAILED(CAMU_StartCapture(PORT_CAM1))) return -1;
+    s_capture_started = 1;
+    s_status.consecutive_errors = 0;
+    return 0;
 }
 
 int qr_scanner_init(void) {
     if (s_camera_ready) return 0;
+    memset(&s_status, 0, sizeof(s_status));
 
     s_decoder = quirc_new();
     if (!s_decoder || quirc_resize(s_decoder, QR_FRAME_WIDTH, QR_FRAME_HEIGHT) < 0) {
@@ -110,6 +183,39 @@ int qr_scanner_init(void) {
         qr_scanner_exit();
         return -1;
     }
+
+    if (!C3D_TexInit(
+        &s_preview_texture,
+        PREVIEW_TEX_WIDTH,
+        PREVIEW_TEX_HEIGHT,
+        GPU_RGB565
+    )) {
+        qr_scanner_exit();
+        return -1;
+    }
+    s_preview_initialized = 1;
+    memset(
+        s_preview_texture.data,
+        0,
+        PREVIEW_TEX_WIDTH * PREVIEW_TEX_HEIGHT * sizeof(u16)
+    );
+    C3D_TexSetFilter(&s_preview_texture, GPU_LINEAR, GPU_LINEAR);
+    C3D_TexSetWrap(
+        &s_preview_texture,
+        GPU_CLAMP_TO_EDGE,
+        GPU_CLAMP_TO_EDGE
+    );
+
+    s_preview_subtexture.width = QR_FRAME_WIDTH;
+    s_preview_subtexture.height = QR_FRAME_HEIGHT;
+    s_preview_subtexture.left = 0.0f;
+    s_preview_subtexture.top = 1.0f;
+    s_preview_subtexture.right =
+        (float)QR_FRAME_WIDTH / PREVIEW_TEX_WIDTH;
+    s_preview_subtexture.bottom =
+        1.0f - ((float)QR_FRAME_HEIGHT / PREVIEW_TEX_HEIGHT);
+    s_preview_image.tex = &s_preview_texture;
+    s_preview_image.subtex = &s_preview_subtexture;
 
     if (!camera_call_ok(camInit())) {
         qr_scanner_exit();
@@ -180,8 +286,14 @@ void qr_scanner_exit(void) {
         quirc_destroy(s_decoder);
         s_decoder = NULL;
     }
+    if (s_preview_initialized) {
+        C3D_TexDelete(&s_preview_texture);
+        memset(&s_preview_texture, 0, sizeof(s_preview_texture));
+        s_preview_initialized = 0;
+    }
 
     s_transfer_unit = 0;
+    memset(&s_status, 0, sizeof(s_status));
 }
 
 int qr_scanner_update(QRResult* result) {
@@ -197,14 +309,25 @@ int qr_scanner_update(QRResult* result) {
         QR_FRAME_BYTES,
         (s16)s_transfer_unit
     );
-    if (R_FAILED(rc)) return -1;
+    if (R_FAILED(rc)) {
+        s_status.consecutive_errors++;
+        if (s_status.consecutive_errors >= CAMERA_ERROR_LIMIT) {
+            return restart_capture();
+        }
+        return 0;
+    }
 
     rc = svcWaitSynchronization(receive_event, QR_CAPTURE_TIMEOUT);
     svcCloseHandle(receive_event);
     if (R_FAILED(rc)) {
-        /* A missed frame is recoverable; keep scanning on the next update. */
+        s_status.consecutive_errors++;
+        if (s_status.consecutive_errors >= CAMERA_ERROR_LIMIT) {
+            return restart_capture();
+        }
         return 0;
     }
+    s_status.consecutive_errors = 0;
+    s_status.frames_captured++;
 
     int width = 0;
     int height = 0;
@@ -213,10 +336,13 @@ int qr_scanner_update(QRResult* result) {
         return -1;
     }
 
-    rgb565_to_grayscale(s_camera_frame, image);
+    s_status.average_luma =
+        rgb565_to_grayscale_and_preview(s_camera_frame, image);
+    s_status.preview_ready = 1;
     quirc_end(s_decoder);
 
     int count = quirc_count(s_decoder);
+    s_status.qr_candidates = count;
     for (int i = 0; i < count; i++) {
         quirc_extract(s_decoder, i, &s_code);
 
@@ -241,4 +367,15 @@ int qr_scanner_update(QRResult* result) {
     }
 
     return 0;
+}
+
+int qr_scanner_get_preview(C2D_Image* image) {
+    if (!image || !s_preview_initialized || !s_status.preview_ready) return 0;
+    *image = s_preview_image;
+    return 1;
+}
+
+void qr_scanner_get_status(QRScannerStatus* status) {
+    if (!status) return;
+    *status = s_status;
 }

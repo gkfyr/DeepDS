@@ -9,6 +9,7 @@
 #pragma once
 
 #include <citro2d.h>
+#include "qr_scanner.h"
 
 #define SCREEN_TOP_W 400
 #define SCREEN_BOT_W 320
@@ -77,6 +78,11 @@ void ui_draw_top(
     const MarketDisplay* market,
     const char* session_id,
     const char* state_name
+);
+
+void ui_draw_qr_top(
+    const C2D_Image* preview,
+    const QRScannerStatus* status
 );
 
 void ui_draw_bottom(

@@ -25,10 +25,10 @@ export function SessionQR({ sid, proxyUrl }: SessionQRProps) {
         <div className="rounded-[16px] border-[6px] border-ds-ink bg-white p-3">
           <QRCodeSVG
             value={qrPayload}
-            size={190}
-            level="M"
-            includeMargin={false}
-            fgColor="#102a43"
+            size={240}
+            level="L"
+            includeMargin
+            fgColor="#000000"
             bgColor="#ffffff"
           />
         </div>

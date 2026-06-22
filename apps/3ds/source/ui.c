@@ -119,6 +119,36 @@ static void draw_empty_top(const char* state_name) {
     }
 }
 
+void ui_draw_qr_top(
+    const C2D_Image* preview,
+    const QRScannerStatus* status
+) {
+    draw_rect(0, 0, SCREEN_TOP_W, SCREEN_H, COL_BG);
+    draw_brand(SCREEN_TOP_W, "QR SCAN");
+
+    draw_card(76, 38, 248, 188, COL_NAVY, COL_BLUE);
+    if (preview) {
+        C2D_DrawImageAt(*preview, 80, 42, 0.4f, NULL, 0.75f, 0.75f);
+
+        /* Quiet-zone guide: keep the full code and some white margin inside. */
+        draw_rect(126, 61, 44, 2, COL_WHITE);
+        draw_rect(126, 61, 2, 44, COL_WHITE);
+        draw_rect(230, 61, 44, 2, COL_WHITE);
+        draw_rect(272, 61, 2, 44, COL_WHITE);
+        draw_rect(126, 163, 2, 44, COL_WHITE);
+        draw_rect(126, 205, 44, 2, COL_WHITE);
+        draw_rect(272, 163, 2, 44, COL_WHITE);
+        draw_rect(230, 205, 44, 2, COL_WHITE);
+    } else {
+        draw_text("STARTING CAMERA", 126, 130, 0.42f, COL_WHITE);
+    }
+
+    if (status && status->qr_candidates > 0) {
+        draw_pill(152, 211, 96, 15, COL_GREEN);
+        draw_text("QR DETECTED", 164, 222, 0.27f, COL_WHITE);
+    }
+}
+
 void ui_draw_top(
     const MarketDisplay* market,
     const char* session_id,
@@ -198,19 +228,19 @@ static void draw_action_button(
     draw_text("MAX 1 dUSDC", x + 14, y + 92, 0.31f, text);
 }
 
-static void draw_pairing_bottom(void) {
+static void draw_pairing_bottom(const char* message) {
     draw_text("Connect DeepDS", 18, 54, 0.72f, COL_INK);
-    draw_text("Keep the QR code inside the camera view.", 18, 80, 0.37f, COL_MUTED);
+    draw_text("Keep the full QR and white border visible.", 18, 80, 0.35f, COL_MUTED);
 
-    draw_card(18, 98, 284, 88, COL_SURFACE, COL_BLUE);
+    draw_card(18, 98, 284, 75, COL_SURFACE, COL_BLUE);
     draw_rect(34, 114, 28, 3, COL_BLUE);
     draw_rect(34, 114, 3, 28, COL_BLUE);
     draw_rect(59, 114, 3, 28, COL_BLUE);
     draw_rect(34, 139, 28, 3, COL_BLUE);
-    draw_text("Auto-pairing is active", 79, 127, 0.45f, COL_INK);
-    draw_text("URL + session are read together", 79, 150, 0.31f, COL_MUTED);
-    draw_text("A", 34, 174, 0.45f, COL_BLUE);
-    draw_text("Manual pairing", 58, 174, 0.39f, COL_INK);
+    draw_text("Camera pairing active", 79, 127, 0.45f, COL_INK);
+    draw_text(message && message[0] ? message : "Waiting for a clear frame", 79, 150, 0.29f, COL_MUTED);
+    draw_text("A", 34, 194, 0.45f, COL_BLUE);
+    draw_text("Manual pairing", 58, 194, 0.39f, COL_INK);
 
     draw_text("START exits to Homebrew Launcher", 58, 229, 0.31f, COL_MUTED);
 }
@@ -228,7 +258,7 @@ void ui_draw_bottom(
     draw_brand(SCREEN_BOT_W, state_name);
 
     if (strcmp(state_name, "QR SCAN") == 0) {
-        draw_pairing_bottom();
+        draw_pairing_bottom(message);
         return;
     }
 

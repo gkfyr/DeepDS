@@ -223,7 +223,38 @@ int main(int argc, char* argv[]) {
         if (g_state == STATE_QR_SCAN) {
             /* Try QR scan */
             QRResult qr;
+            QRScannerStatus scan_status;
+            C2D_Image camera_preview;
+            char scan_message[64];
             int scanned = g_qr_scanner_ready ? qr_scanner_update(&qr) : 0;
+            qr_scanner_get_status(&scan_status);
+            int has_preview = qr_scanner_get_preview(&camera_preview);
+
+            if (!g_qr_scanner_ready) {
+                snprintf(scan_message, sizeof(scan_message), "Camera unavailable - press A");
+            } else if (scan_status.consecutive_errors > 0) {
+                snprintf(
+                    scan_message,
+                    sizeof(scan_message),
+                    "Recovering camera (%d)",
+                    scan_status.consecutive_errors
+                );
+            } else if (scan_status.qr_candidates > 0) {
+                snprintf(
+                    scan_message,
+                    sizeof(scan_message),
+                    "Detected %d code - decoding",
+                    scan_status.qr_candidates
+                );
+            } else {
+                snprintf(
+                    scan_message,
+                    sizeof(scan_message),
+                    "Frame %lu  light %d%%",
+                    (unsigned long)scan_status.frames_captured,
+                    scan_status.average_luma * 100 / 255
+                );
+            }
 
             if (scanned == 1) {
                 /* Got QR data */
@@ -251,12 +282,21 @@ int main(int argc, char* argv[]) {
             C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
             C2D_TargetClear(top, COL_BLACK);
             C2D_SceneBegin(top);
-            ui_draw_top(&g_market, "", "QR SCAN");
+            ui_draw_qr_top(
+                has_preview ? &camera_preview : NULL,
+                &scan_status
+            );
 
             /* Bottom: instructions */
             C2D_TargetClear(bot, COL_BLACK);
             C2D_SceneBegin(bot);
-            ui_draw_bottom(&g_trade_result, 0, 0, "QR SCAN", "");
+            ui_draw_bottom(
+                &g_trade_result,
+                0,
+                0,
+                "QR SCAN",
+                scan_message
+            );
             C3D_FrameEnd(0);
 
         } else if (g_state == STATE_CONNECTING) {
