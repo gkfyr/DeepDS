@@ -9,6 +9,20 @@ interface SessionQRProps {
 
 export function SessionQR({ sid, proxyUrl }: SessionQRProps) {
   /*
+   * The original 3DS SSL service only supports up to TLS 1.1, while Vercel
+   * requires TLS 1.2+. Cloudflare Quick Tunnels still accept plain HTTP and
+   * forward it to the local proxy, so the browser uses the HTTPS tunnel URL
+   * while the console receives its HTTP equivalent.
+   */
+  const configured3dsUrl = process.env.NEXT_PUBLIC_3DS_PROXY_URL?.trim();
+  const consoleProxyUrl =
+    configured3dsUrl ||
+    (proxyUrl.startsWith('https://') &&
+    proxyUrl.includes('.trycloudflare.com')
+      ? `http://${proxyUrl.slice('https://'.length)}`
+      : proxyUrl);
+
+  /*
    * Compact wire format for the 3DS camera:
    * D1|https://proxy.example|uuid-without-hyphens
    *
@@ -16,7 +30,7 @@ export function SessionQR({ sid, proxyUrl }: SessionQRProps) {
    * (Version 5) to 33×33 (Version 4) for the deployed Vercel URL. The larger
    * modules are much more reliable with the 3DS QVGA camera.
    */
-  const qrPayload = `D1|${proxyUrl}|${sid.replaceAll('-', '')}`;
+  const qrPayload = `D1|${consoleProxyUrl}|${sid.replaceAll('-', '')}`;
 
   return (
     <div className="flex flex-col items-center text-center">
@@ -53,15 +67,15 @@ export function SessionQR({ sid, proxyUrl }: SessionQRProps) {
         <div className="flex items-center justify-between gap-4 px-4 py-3">
           <span className="data-label">Proxy</span>
           <span className="max-w-[210px] truncate font-mono text-[11px] text-ds-ink">
-            {proxyUrl}
+            {consoleProxyUrl}
           </span>
         </div>
       </div>
 
       <div className="mt-4 max-w-sm rounded-[14px] bg-ds-blue-pale px-4 py-3 text-left text-xs leading-5 text-ds-muted">
         <strong className="text-ds-ink">On your 3DS:</strong> open DeepDS and
-        point the outer camera at this code. The server and session connect
-        together—no typing needed.
+        point the outer camera at this code. Legacy HTTP is selected
+        automatically for Cloudflare Tunnel addresses.
       </div>
     </div>
   );

@@ -77,8 +77,10 @@ else
 fi
 
 echo
-echo "Creating a free public HTTPS tunnel..."
+echo "Creating a free public Cloudflare tunnel..."
 echo "Copy the https://...trycloudflare.com URL into the web app's Server address field."
+echo "DeepDS automatically encodes the matching http:// URL in the 3DS QR code."
+echo "This is required because the original 3DS supports TLS 1.1, while Vercel requires TLS 1.2+."
 echo "Keep this terminal open during the demo. Press Ctrl+C to stop hosting."
 echo
 

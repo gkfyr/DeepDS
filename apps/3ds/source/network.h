@@ -2,7 +2,9 @@
  * network.h — HTTP client wrappers for 3DS httpc service
  *
  * IMPORTANT: 3DS constraints:
- * - Plain HTTP only (no TLS for simplicity in PoC)
+ * - Plain HTTP is required for original-model 3DS compatibility
+ * - The system SSL service only supports TLS 1.1; modern Vercel TLS cannot
+ *   be reached directly
  * - No WebSockets
  * - Small response buffers (3DS has ~128MB RAM but httpc buffers are limited)
  * - Simple flat JSON responses only
