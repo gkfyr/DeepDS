@@ -38,7 +38,20 @@ unsigned int network_last_result(void) {
  * a production custody service.
  */
 static Result configure_context(httpcContext* ctx, const char* url) {
-    Result rc = httpcAddRequestHeaderField(
+    Result rc;
+
+    /*
+     * SSL options must be configured immediately after httpcOpenContext().
+     * On real hardware, setting DisableVerify after other context mutations
+     * can leave the option unapplied and httpcBeginRequest() then fails with
+     * 0xD8A0A03C (server certificate verification failed).
+     */
+    if (strncmp(url, "https://", 8) == 0) {
+        rc = httpcSetSSLOpt(ctx, SSLCOPT_DisableVerify);
+        if (R_FAILED(rc)) return rc;
+    }
+
+    rc = httpcAddRequestHeaderField(
         ctx,
         "User-Agent",
         "DeepDS-3DS/0.2"
@@ -53,11 +66,6 @@ static Result configure_context(httpcContext* ctx, const char* url) {
 
     rc = httpcAddRequestHeaderField(ctx, "Connection", "close");
     if (R_FAILED(rc)) return rc;
-
-    if (strncmp(url, "https://", 8) == 0) {
-        rc = httpcSetSSLOpt(ctx, SSLCOPT_DisableVerify);
-        if (R_FAILED(rc)) return rc;
-    }
 
     return 0;
 }
