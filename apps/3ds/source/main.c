@@ -58,6 +58,7 @@ static AppState  g_state = STATE_QR_SCAN;
 static char      g_error_msg[128];
 static MarketDisplay g_market;
 static TradeResult   g_trade_result;
+static int g_qr_scanner_ready = 0;
 
 /* Timing */
 static u64 g_last_market_fetch = 0;
@@ -200,8 +201,8 @@ int main(int argc, char* argv[]) {
     /* Initialize network */
     int net_ok = (network_init() == 0);
 
-    /* Initialize QR scanner */
-    qr_scanner_init();
+    /* Initialize QR scanner. Manual pairing remains available on failure. */
+    g_qr_scanner_ready = (qr_scanner_init() == 0);
 
     int buy_pressed_frame  = 0;
     int sell_pressed_frame = 0;
@@ -221,16 +222,26 @@ int main(int argc, char* argv[]) {
         if (g_state == STATE_QR_SCAN) {
             /* Try QR scan */
             QRResult qr;
-            int scanned = qr_scanner_update(&qr);
+            int scanned = g_qr_scanner_ready ? qr_scanner_update(&qr) : 0;
 
             if (scanned == 1) {
                 /* Got QR data */
-                session_set(qr.url, qr.sid);
-                g_state = STATE_CONNECTING;
+                if (session_set(qr.url, qr.sid)) {
+                    qr_scanner_exit();
+                    g_qr_scanner_ready = 0;
+                    g_state = STATE_CONNECTING;
+                }
+            } else if (scanned < 0) {
+                qr_scanner_exit();
+                g_qr_scanner_ready = 0;
             } else if (keys_down & KEY_A) {
                 /* A button = manual entry fallback */
+                qr_scanner_exit();
+                g_qr_scanner_ready = 0;
                 if (enter_session_manual()) {
                     g_state = STATE_CONNECTING;
+                } else {
+                    g_qr_scanner_ready = (qr_scanner_init() == 0);
                 }
             }
 
@@ -337,6 +348,7 @@ int main(int argc, char* argv[]) {
                 session_clear();
                 g_state = STATE_QR_SCAN;
                 memset(&g_market, 0, sizeof(g_market));
+                g_qr_scanner_ready = (qr_scanner_init() == 0);
             }
 
             ui_begin_frame();

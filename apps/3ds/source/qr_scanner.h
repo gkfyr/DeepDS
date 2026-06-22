@@ -4,8 +4,7 @@
  * Uses the 3DS cam service to capture frames and quirc to decode QR codes.
  * The QR code payload is a JSON string: {"url":"http://...","sid":"uuid"}
  *
- * TODO: Integrate quirc library (https://github.com/dlbeer/quirc)
- * For PoC, we provide the interface and a manual input fallback.
+ * Uses the outer camera at QVGA resolution and the bundled quirc decoder.
  */
 
 #pragma once
@@ -31,7 +30,7 @@ void qr_scanner_exit(void);
 
 /**
  * Attempt to capture a frame and decode a QR code.
- * Non-blocking — returns 0 if no QR found yet, 1 if decoded.
+ * Captures one camera frame and returns 0 if no QR was found, 1 if decoded.
  *
  * @param result  Output QR result (filled on success)
  * @return 1 if QR decoded, 0 if still scanning, -1 on error

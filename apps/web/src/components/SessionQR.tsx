@@ -50,9 +50,9 @@ export function SessionQR({ sid, proxyUrl }: SessionQRProps) {
       </div>
 
       <div className="mt-4 max-w-sm rounded-[14px] bg-ds-blue-pale px-4 py-3 text-left text-xs leading-5 text-ds-muted">
-        <strong className="text-ds-ink">Current 3DS build:</strong> press{' '}
-        <strong className="text-ds-ink">A</strong> on the scan screen, then enter
-        the proxy URL and full session UUID shown above.
+        <strong className="text-ds-ink">On your 3DS:</strong> open DeepDS and
+        point the outer camera at this code. The server and session connect
+        together—no typing needed.
       </div>
     </div>
   );

@@ -14,9 +14,9 @@ APP_DESCRIPTION := DeepBook V3 Trading Terminal
 APP_AUTHOR  := DeepDS Team
 TARGET      := deepds
 BUILD       := build
-SOURCES     := source
+SOURCES     := source vendor/quirc
 DATA        := data
-INCLUDES    := include
+INCLUDES    := include source vendor/quirc
 ROMFS       :=
 
 #---------------------------------------------------------------------------------

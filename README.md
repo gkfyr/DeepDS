@@ -93,7 +93,7 @@ make
 
 Copy `deepds.3dsx` to the `/3ds/` directory on the SD card and launch it through Homebrew Launcher.
 
-The QR camera decoder remains an optional follow-up because no QR library is vendored yet. Press `A` on the scan screen to enter the proxy URL and session UUID with the native software keyboard; the rest of the flow is functional. This keeps the PoC buildable without inventing unsupported camera APIs.
+Open the pairing page in the web app, then point the 3DS outer camera at its QR code. The app decodes the proxy URL and session UUID together using the bundled `quirc` library. Press `A` on the scan screen if you need the native software-keyboard fallback.
 
 ## API
 
