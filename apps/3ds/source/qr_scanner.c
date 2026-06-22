@@ -21,6 +21,7 @@
 #define PREVIEW_TEX_WIDTH    512
 #define PREVIEW_TEX_HEIGHT   256
 #define CAMERA_ERROR_LIMIT   3
+#define DECODE_RETRY_FRAMES  8
 
 static u16* s_camera_frame = NULL;
 static struct quirc* s_decoder = NULL;
@@ -96,6 +97,35 @@ static int json_extract_string(
 int qr_parse_payload(const char* json, QRResult* result) {
     if (!json || !result) return 0;
 
+    /* Compact camera-friendly payload: D1|url|32-char UUID. */
+    if (strncmp(json, "D1|", 3) == 0) {
+        const char* url_start = json + 3;
+        const char* separator = strrchr(url_start, '|');
+        if (!separator || separator == url_start) return 0;
+
+        size_t url_len = (size_t)(separator - url_start);
+        const char* compact_sid = separator + 1;
+        size_t sid_len = strlen(compact_sid);
+        if (url_len >= QR_URL_MAX || sid_len != 32) return 0;
+
+        memcpy(result->url, url_start, url_len);
+        result->url[url_len] = '\0';
+
+        /* Restore UUID hyphens expected by the proxy session key. */
+        snprintf(
+            result->sid,
+            QR_SID_MAX,
+            "%.8s-%.4s-%.4s-%.4s-%.12s",
+            compact_sid,
+            compact_sid + 8,
+            compact_sid + 12,
+            compact_sid + 16,
+            compact_sid + 20
+        );
+        return 1;
+    }
+
+    /* Backward compatibility with older web deployments. */
     int got_url = json_extract_string(json, "url", result->url, QR_URL_MAX);
     int got_sid = json_extract_string(json, "sid", result->sid, QR_SID_MAX);
 
@@ -371,6 +401,9 @@ int qr_scanner_update(QRResult* result) {
     if (!result || !s_camera_ready || !s_camera_frame || !s_decoder) {
         return -1;
     }
+    if (s_status.retry_notice_frames > 0) {
+        s_status.retry_notice_frames--;
+    }
 
     Handle receive_event = 0;
     Result rc = CAMU_SetReceiving(
@@ -414,15 +447,25 @@ int qr_scanner_update(QRResult* result) {
 
     int count = quirc_count(s_decoder);
     s_status.qr_candidates = count;
+    s_status.qr_grid_size = 0;
+    s_status.decode_error = 0;
+    s_status.payload_invalid = 0;
     for (int i = 0; i < count; i++) {
         quirc_extract(s_decoder, i, &s_code);
+        s_status.qr_grid_size = s_code.size;
 
         quirc_decode_error_t decode_result = quirc_decode(&s_code, &s_data);
-        if (decode_result == QUIRC_ERROR_DATA_ECC) {
+        /*
+         * Outer-camera images can be mirrored depending on hardware and
+         * camera configuration. Retry the mirrored module matrix for every
+         * decode failure, not only DATA_ECC.
+         */
+        if (decode_result != QUIRC_SUCCESS) {
             quirc_flip(&s_code);
             decode_result = quirc_decode(&s_code, &s_data);
         }
         if (decode_result != QUIRC_SUCCESS || s_data.payload_len <= 0) {
+            s_status.decode_error = (int)decode_result;
             continue;
         }
 
@@ -433,8 +476,37 @@ int qr_scanner_update(QRResult* result) {
         s_data.payload[payload_len] = '\0';
 
         if (qr_parse_payload((const char*)s_data.payload, result)) {
+            s_status.consecutive_decode_failures = 0;
             return 1;
         }
+        s_status.payload_invalid = 1;
+    }
+
+    if (count > 0 && (s_status.decode_error || s_status.payload_invalid)) {
+        s_status.consecutive_decode_failures++;
+
+        /*
+         * A detected-but-undecodable QR is a transient camera-frame error.
+         * After several fresh frames, clear the camera queue and restart
+         * capture automatically instead of leaving the scanner in that state.
+         */
+        if (s_status.consecutive_decode_failures >= DECODE_RETRY_FRAMES) {
+            int last_decode_error = s_status.decode_error;
+            int payload_invalid = s_status.payload_invalid;
+            int grid_size = s_status.qr_grid_size;
+
+            if (restart_capture() < 0) return -1;
+
+            s_status.auto_retries++;
+            s_status.retry_notice_frames = 12;
+            s_status.consecutive_decode_failures = 0;
+            s_status.decode_error = last_decode_error;
+            s_status.payload_invalid = payload_invalid;
+            s_status.qr_grid_size = grid_size;
+            s_status.qr_candidates = 0;
+        }
+    } else {
+        s_status.consecutive_decode_failures = 0;
     }
 
     return 0;

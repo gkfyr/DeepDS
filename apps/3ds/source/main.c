@@ -246,11 +246,36 @@ int main(int argc, char* argv[]) {
                     scan_status.consecutive_errors
                 );
             } else if (scan_status.qr_candidates > 0) {
+                if (scan_status.payload_invalid) {
+                    snprintf(
+                        scan_message,
+                        sizeof(scan_message),
+                        "QR payload is not DeepDS JSON"
+                    );
+                } else if (scan_status.decode_error > 0) {
+                    snprintf(
+                        scan_message,
+                        sizeof(scan_message),
+                        "QR grid %d decode E%d",
+                        scan_status.qr_grid_size,
+                        scan_status.decode_error
+                    );
+                } else {
+                    snprintf(
+                        scan_message,
+                        sizeof(scan_message),
+                        "Detected %d code - decoding",
+                        scan_status.qr_candidates
+                    );
+                }
+            } else if (scan_status.retry_notice_frames > 0 &&
+                       scan_status.decode_error > 0) {
                 snprintf(
                     scan_message,
                     sizeof(scan_message),
-                    "Detected %d code - decoding",
-                    scan_status.qr_candidates
+                    "Auto retry %lu after decode E%d",
+                    (unsigned long)scan_status.auto_retries,
+                    scan_status.decode_error
                 );
             } else {
                 snprintf(

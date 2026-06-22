@@ -42,6 +42,17 @@ static void draw_rect(float x, float y, float w, float h, u32 color) {
     C2D_DrawRectSolid(x, y, 0.5f, w, h, color);
 }
 
+static void draw_rect_at(
+    float x,
+    float y,
+    float depth,
+    float w,
+    float h,
+    u32 color
+) {
+    C2D_DrawRectSolid(x, y, depth, w, h, color);
+}
+
 /* Low-resolution rounded card using stepped corners. */
 static void draw_card(float x, float y, float w, float h, u32 fill, u32 border) {
     draw_rect(x + 4, y, w - 8, h, fill);
@@ -72,6 +83,29 @@ static void draw_text(const char* str, float x, float y, float size, u32 color) 
         x,
         y,
         0.5f,
+        size,
+        size,
+        color
+    );
+}
+
+static void draw_text_at(
+    const char* str,
+    float x,
+    float y,
+    float depth,
+    float size,
+    u32 color
+) {
+    C2D_Text text;
+    C2D_TextParse(&text, s_text_buf, str);
+    C2D_TextOptimize(&text);
+    C2D_DrawText(
+        &text,
+        C2D_WithColor | C2D_AtBaseline,
+        x,
+        y,
+        depth,
         size,
         size,
         color
@@ -128,24 +162,25 @@ void ui_draw_qr_top(
 
     draw_card(76, 38, 248, 188, COL_NAVY, COL_BLUE);
     if (preview) {
-        C2D_DrawImageAt(*preview, 80, 42, 0.4f, NULL, 0.75f, 0.75f);
+        /* Must be in front of the card (cards render at depth 0.5). */
+        C2D_DrawImageAt(*preview, 80, 42, 0.6f, NULL, 0.75f, 0.75f);
 
         /* Quiet-zone guide: keep the full code and some white margin inside. */
-        draw_rect(126, 61, 44, 2, COL_WHITE);
-        draw_rect(126, 61, 2, 44, COL_WHITE);
-        draw_rect(230, 61, 44, 2, COL_WHITE);
-        draw_rect(272, 61, 2, 44, COL_WHITE);
-        draw_rect(126, 163, 2, 44, COL_WHITE);
-        draw_rect(126, 205, 44, 2, COL_WHITE);
-        draw_rect(272, 163, 2, 44, COL_WHITE);
-        draw_rect(230, 205, 44, 2, COL_WHITE);
+        draw_rect_at(126, 61, 0.7f, 44, 2, COL_WHITE);
+        draw_rect_at(126, 61, 0.7f, 2, 44, COL_WHITE);
+        draw_rect_at(230, 61, 0.7f, 44, 2, COL_WHITE);
+        draw_rect_at(272, 61, 0.7f, 2, 44, COL_WHITE);
+        draw_rect_at(126, 163, 0.7f, 2, 44, COL_WHITE);
+        draw_rect_at(126, 205, 0.7f, 44, 2, COL_WHITE);
+        draw_rect_at(272, 163, 0.7f, 2, 44, COL_WHITE);
+        draw_rect_at(230, 205, 0.7f, 44, 2, COL_WHITE);
     } else {
         draw_text("STARTING CAMERA", 126, 130, 0.42f, COL_WHITE);
     }
 
     if (status && status->qr_candidates > 0) {
-        draw_pill(152, 211, 96, 15, COL_GREEN);
-        draw_text("QR DETECTED", 164, 222, 0.27f, COL_WHITE);
+        draw_rect_at(152, 211, 0.7f, 96, 15, COL_GREEN);
+        draw_text_at("QR DETECTED", 164, 222, 0.8f, 0.27f, COL_WHITE);
     }
 }
 
@@ -231,7 +266,7 @@ static void draw_action_button(
 static void draw_pairing_bottom(const char* message) {
     draw_text("Connect DeepDS", 18, 54, 0.72f, COL_INK);
     draw_text("Keep the full QR and white border visible.", 18, 80, 0.35f, COL_MUTED);
-    draw_text("QR CAMERA v0.3", 220, 54, 0.25f, COL_BLUE);
+    draw_text("QR CAMERA v0.6", 220, 54, 0.25f, COL_BLUE);
 
     draw_card(18, 98, 284, 75, COL_SURFACE, COL_BLUE);
     draw_rect(34, 114, 28, 3, COL_BLUE);

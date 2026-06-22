@@ -8,7 +8,15 @@ interface SessionQRProps {
 }
 
 export function SessionQR({ sid, proxyUrl }: SessionQRProps) {
-  const qrPayload = JSON.stringify({ url: proxyUrl, sid });
+  /*
+   * Compact wire format for the 3DS camera:
+   * D1|https://proxy.example|uuid-without-hyphens
+   *
+   * Removing JSON keys and UUID hyphens lowers the QR grid from 37×37
+   * (Version 5) to 33×33 (Version 4) for the deployed Vercel URL. The larger
+   * modules are much more reliable with the 3DS QVGA camera.
+   */
+  const qrPayload = `D1|${proxyUrl}|${sid.replaceAll('-', '')}`;
 
   return (
     <div className="flex flex-col items-center text-center">
@@ -25,11 +33,12 @@ export function SessionQR({ sid, proxyUrl }: SessionQRProps) {
         <div className="rounded-[16px] border-[6px] border-ds-ink bg-white p-3">
           <QRCodeSVG
             value={qrPayload}
-            size={240}
+            size={280}
             level="L"
             includeMargin
             fgColor="#000000"
             bgColor="#ffffff"
+            style={{ width: 'min(280px, 72vw)', height: 'auto' }}
           />
         </div>
       </div>

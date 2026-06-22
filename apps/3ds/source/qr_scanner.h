@@ -27,6 +27,12 @@ typedef struct {
     int preview_ready;
     int error_stage;
     unsigned int last_result;
+    int qr_grid_size;
+    int decode_error;
+    int payload_invalid;
+    int consecutive_decode_failures;
+    unsigned int auto_retries;
+    int retry_notice_frames;
 } QRScannerStatus;
 
 /**
