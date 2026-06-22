@@ -59,10 +59,11 @@ static char      g_error_msg[128];
 static MarketDisplay g_market;
 static TradeResult   g_trade_result;
 static int g_qr_scanner_ready = 0;
+static unsigned int g_loading_frame = 0;
 
 /* Timing */
 static u64 g_last_market_fetch = 0;
-#define MARKET_POLL_INTERVAL_US  (2 * 1000000ULL)   /* 2 seconds */
+#define MARKET_POLL_INTERVAL_MS  10000ULL
 #define TRADE_RESULT_FRAMES      120                 /* ~2 seconds at 60fps */
 
 /* Trade quantity: 1 SUI = 1,000,000,000 MIST */
@@ -71,6 +72,24 @@ static u64 g_last_market_fetch = 0;
 /* ---- Build URL helpers ---- */
 static void build_url(char* out, size_t sz, const char* endpoint) {
     snprintf(out, sz, "%s%s", g_session.url, endpoint);
+}
+
+static void render_loading(
+    C3D_RenderTarget* top,
+    C3D_RenderTarget* bot,
+    const char* title,
+    const char* detail
+) {
+    ui_begin_frame();
+    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+    C2D_TargetClear(top, COL_BLACK);
+    C2D_SceneBegin(top);
+    ui_draw_loading(1, title, detail, g_loading_frame);
+    C2D_TargetClear(bot, COL_BLACK);
+    C2D_SceneBegin(bot);
+    ui_draw_loading(0, title, detail, g_loading_frame);
+    C3D_FrameEnd(0);
+    g_loading_frame++;
 }
 
 /* ---- Fetch market data from proxy ---- */
@@ -210,6 +229,7 @@ int main(int argc, char* argv[]) {
 
     int buy_pressed_frame  = 0;
     int sell_pressed_frame = 0;
+    int selected_action = 0;
 
     /* ---- Main loop ---- */
     while (aptMainLoop()) {
@@ -295,6 +315,7 @@ int main(int argc, char* argv[]) {
                 if (session_set(qr.url, qr.sid)) {
                     qr_scanner_exit();
                     g_qr_scanner_ready = 0;
+                    has_preview = 0;
                     g_state = STATE_CONNECTING;
                 }
             } else if (scanned < 0) {
@@ -331,6 +352,7 @@ int main(int argc, char* argv[]) {
                 &g_trade_result,
                 0,
                 0,
+                selected_action,
                 "QR SCAN",
                 scan_message
             );
@@ -338,6 +360,7 @@ int main(int argc, char* argv[]) {
 
         } else if (g_state == STATE_CONNECTING) {
             char verify_response[128] = {0};
+            render_loading(top, bot, "Pairing console", "Checking session");
             if (!net_ok) {
                 snprintf(g_error_msg, sizeof(g_error_msg), "NETWORK INIT FAILED");
                 g_state = STATE_ERROR;
@@ -347,10 +370,13 @@ int main(int argc, char* argv[]) {
                     sizeof(verify_response)
                 );
                 if (verify_status == 200) {
-                /* Connected! Fetch initial data */
-                fetch_market_data();
-                fetch_balance();
-                g_state = STATE_TRADING;
+                    /* Connected! Fetch initial data */
+                    render_loading(top, bot, "Loading market", "Fetching prices");
+                    fetch_market_data();
+                    render_loading(top, bot, "Loading wallet", "Reading allowance");
+                    fetch_balance();
+                    g_last_market_fetch = osGetTime();
+                    g_state = STATE_TRADING;
                 } else if (verify_status == 404) {
                     snprintf(
                         g_error_msg,
@@ -380,11 +406,12 @@ int main(int argc, char* argv[]) {
 
         } else if (g_state == STATE_TRADING) {
             /* ---- Periodic market data fetch ---- */
-            u64 now = svcGetSystemTick();
-            if (now - g_last_market_fetch > MARKET_POLL_INTERVAL_US * 268111ULL / 1000000ULL) {
+            u64 now = osGetTime();
+            if (now - g_last_market_fetch > MARKET_POLL_INTERVAL_MS) {
+                render_loading(top, bot, "Updating market", "Syncing latest data");
                 fetch_market_data();
                 fetch_balance();
-                g_last_market_fetch = now;
+                g_last_market_fetch = osGetTime();
             }
 
             /* ---- Trade result countdown ---- */
@@ -399,24 +426,66 @@ int main(int argc, char* argv[]) {
             buy_pressed_frame  = 0;
             sell_pressed_frame = 0;
 
+            if (keys_down & (KEY_LEFT | KEY_RIGHT)) {
+                selected_action = 1 - selected_action;
+            }
+
+            if (keys_down & KEY_L) {
+                selected_action = 0;
+                buy_pressed_frame = 1;
+                render_loading(top, bot, "Buying UP", "Submitting prediction");
+                execute_trade("UP");
+                fetch_balance();
+            } else if (keys_down & KEY_R) {
+                selected_action = 1;
+                sell_pressed_frame = 1;
+                render_loading(top, bot, "Buying DOWN", "Submitting prediction");
+                execute_trade("DOWN");
+                fetch_balance();
+            } else if (keys_down & KEY_A) {
+                if (selected_action == 0) {
+                    buy_pressed_frame = 1;
+                    render_loading(top, bot, "Buying UP", "Submitting prediction");
+                    execute_trade("UP");
+                } else {
+                    sell_pressed_frame = 1;
+                    render_loading(top, bot, "Buying DOWN", "Submitting prediction");
+                    execute_trade("DOWN");
+                }
+                fetch_balance();
+            } else if (keys_down & KEY_X) {
+                render_loading(top, bot, "Updating market", "Syncing latest data");
+                fetch_market_data();
+                fetch_balance();
+                g_last_market_fetch = osGetTime();
+            }
+
             if (hidKeysHeld() & KEY_TOUCH) {
                 touchPosition touch;
                 hidTouchRead(&touch);
 
                 if (ui_touch_in_buy(touch.px, touch.py)) {
+                    selected_action = 0;
                     buy_pressed_frame = 1;
                     if (keys_down & KEY_TOUCH) {
+                        render_loading(top, bot, "Buying UP", "Submitting prediction");
                         execute_trade("UP");
+                        fetch_balance();
                     }
                 } else if (ui_touch_in_down(touch.px, touch.py)) {
+                    selected_action = 1;
                     sell_pressed_frame = 1;
                     if (keys_down & KEY_TOUCH) {
+                        render_loading(top, bot, "Buying DOWN", "Submitting prediction");
                         execute_trade("DOWN");
+                        fetch_balance();
                     }
                 } else if (ui_touch_in_refresh(touch.px, touch.py)) {
                     if (keys_down & KEY_TOUCH) {
+                        render_loading(top, bot, "Updating market", "Syncing latest data");
                         fetch_market_data();
                         fetch_balance();
+                        g_last_market_fetch = osGetTime();
                     }
                 } else if (ui_touch_in_quit(touch.px, touch.py)) {
                     if (keys_down & KEY_TOUCH) break;
@@ -437,6 +506,7 @@ int main(int argc, char* argv[]) {
                 &g_trade_result,
                 buy_pressed_frame,
                 sell_pressed_frame,
+                selected_action,
                 "TRADING",
                 ""
             );
@@ -461,7 +531,14 @@ int main(int argc, char* argv[]) {
 
             C2D_TargetClear(bot, COL_BLACK);
             C2D_SceneBegin(bot);
-            ui_draw_bottom(&g_trade_result, 0, 0, "ERROR", g_error_msg);
+            ui_draw_bottom(
+                &g_trade_result,
+                0,
+                0,
+                selected_action,
+                "ERROR",
+                g_error_msg
+            );
 
             C3D_FrameEnd(0);
         }

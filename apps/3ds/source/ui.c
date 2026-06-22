@@ -255,6 +255,7 @@ static void draw_action_button(
     float w,
     float h,
     int pressed,
+    int selected,
     int is_up
 ) {
     u32 soft = is_up ? COL_GREEN_SOFT : COL_CORAL_SOFT;
@@ -262,16 +263,25 @@ static void draw_action_button(
     u32 fill = pressed ? strong : soft;
     u32 text = pressed ? COL_WHITE : strong;
 
-    draw_card(x, y, w, h, fill, strong);
+    if (selected) {
+        draw_card(x - 3, y - 3, w + 6, h + 6, COL_BLUE, COL_BLUE);
+        draw_card(x, y, w, h, fill, strong);
+    } else {
+        draw_card(x, y, w, h, fill, strong);
+    }
     draw_text(is_up ? "BTC ABOVE" : "BTC BELOW", x + 14, y + 25, 0.32f, text);
     draw_text(is_up ? "UP" : "DOWN", x + 14, y + 70, 0.90f, text);
     draw_text("MAX 1 dUSDC", x + 14, y + 92, 0.31f, text);
+    if (selected) {
+        draw_pill(x + w - 40, y + 10, 28, 18, COL_BLUE);
+        draw_text("A", x + w - 30, y + 23, 0.34f, COL_WHITE);
+    }
 }
 
 static void draw_pairing_bottom(const char* message) {
     draw_text("Connect DeepDS", 18, 54, 0.72f, COL_INK);
     draw_text("Keep the full QR and white border visible.", 18, 80, 0.35f, COL_MUTED);
-    draw_text("QR CAMERA v0.9", 220, 54, 0.25f, COL_BLUE);
+    draw_text("QR CAMERA v1.0", 220, 54, 0.25f, COL_BLUE);
 
     draw_card(18, 98, 284, 75, COL_SURFACE, COL_BLUE);
     draw_rect(34, 114, 28, 3, COL_BLUE);
@@ -290,6 +300,7 @@ void ui_draw_bottom(
     const TradeResult* last_trade,
     int up_pressed,
     int down_pressed,
+    int selected_action,
     const char* state_name,
     const char* message
 ) {
@@ -313,9 +324,16 @@ void ui_draw_bottom(
         return;
     }
 
-    draw_text("Choose the next move", 14, 54, 0.60f, COL_INK);
-    draw_action_button(BTN_BUY_X, BTN_BUY_Y, BTN_BUY_W, BTN_BUY_H, up_pressed, 1);
-    draw_action_button(BTN_SELL_X, BTN_SELL_Y, BTN_SELL_W, BTN_SELL_H, down_pressed, 0);
+    draw_text("Choose the next move", 14, 50, 0.56f, COL_INK);
+    draw_text("< > focus   A buy   L UP   R DOWN", 14, 64, 0.27f, COL_MUTED);
+    draw_action_button(
+        BTN_BUY_X, BTN_BUY_Y, BTN_BUY_W, BTN_BUY_H,
+        up_pressed, selected_action == 0, 1
+    );
+    draw_action_button(
+        BTN_SELL_X, BTN_SELL_Y, BTN_SELL_W, BTN_SELL_H,
+        down_pressed, selected_action == 1, 0
+    );
 
     draw_card(
         BTN_REFRESH_X,
@@ -325,7 +343,7 @@ void ui_draw_bottom(
         COL_SURFACE,
         COL_LINE
     );
-    draw_text("REFRESH", BTN_REFRESH_X + 39, BTN_REFRESH_Y + 25, 0.38f, COL_BLUE);
+    draw_text("X  REFRESH", BTN_REFRESH_X + 27, BTN_REFRESH_Y + 25, 0.36f, COL_BLUE);
 
     draw_card(
         BTN_QUIT_X,
@@ -335,7 +353,7 @@ void ui_draw_bottom(
         COL_SURFACE,
         COL_LINE
     );
-    draw_text("EXIT", BTN_QUIT_X + 54, BTN_QUIT_Y + 25, 0.38f, COL_MUTED);
+    draw_text("START  EXIT", BTN_QUIT_X + 29, BTN_QUIT_Y + 25, 0.34f, COL_MUTED);
 
     if (last_trade && last_trade->show) {
         u32 fill = last_trade->success ? COL_GREEN : COL_CORAL;
@@ -346,6 +364,49 @@ void ui_draw_bottom(
             snprintf(buf, sizeof(buf), "TRADE FAILED");
         }
         draw_text(buf, 54, 236, 0.27f, COL_WHITE);
+    }
+}
+
+void ui_draw_loading(
+    int top_screen,
+    const char* title,
+    const char* detail,
+    unsigned int frame
+) {
+    float width = top_screen ? SCREEN_TOP_W : SCREEN_BOT_W;
+    float card_x = top_screen ? 48.0f : 24.0f;
+    float card_w = top_screen ? 304.0f : 272.0f;
+    static const char* spinner[] = { ".", "..", "...", "...." };
+
+    draw_rect(0, 0, width, SCREEN_H, COL_BG);
+    draw_brand(width, "LOADING");
+    draw_card(card_x, 62, card_w, 116, COL_SURFACE, COL_BLUE);
+    draw_pill(card_x + 18, 82, 76, 22, COL_BLUE_SOFT);
+    draw_text("PLEASE WAIT", card_x + 29, 97, 0.28f, COL_BLUE);
+    draw_text(title ? title : "Loading", card_x + 18, 132, 0.60f, COL_INK);
+
+    char line[128];
+    snprintf(
+        line,
+        sizeof(line),
+        "%s%s",
+        detail ? detail : "Contacting server",
+        spinner[(frame / 15) % 4]
+    );
+    draw_text(line, card_x + 18, 157, 0.32f, COL_MUTED);
+
+    float progress_w = card_w - 36;
+    draw_rect(card_x + 18, 165, progress_w, 5, COL_LINE);
+    draw_rect(
+        card_x + 18,
+        165,
+        28 + (float)((frame * 5) % (unsigned int)(progress_w - 28)),
+        5,
+        COL_BLUE
+    );
+
+    if (!top_screen) {
+        draw_text("Do not close the lid", 87, 211, 0.30f, COL_MUTED);
     }
 }
 

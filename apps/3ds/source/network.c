@@ -139,6 +139,10 @@ static int read_response(httpcContext* ctx, char* buf, size_t buf_sz) {
         rc = httpcDownloadData(ctx, (u8*)(buf + offset), chunk, &chunk);
         offset += chunk;
         if (rc == HTTPC_RESULTCODE_DOWNLOADPENDING) continue;
+        if (R_FAILED(rc)) {
+            buf[offset] = '\0';
+            return network_fail(rc);
+        }
         break;
     }
     buf[offset] = '\0';

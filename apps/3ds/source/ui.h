@@ -89,8 +89,16 @@ void ui_draw_bottom(
     const TradeResult* last_trade,
     int up_pressed,
     int down_pressed,
+    int selected_action,
     const char* state_name,
     const char* message
+);
+
+void ui_draw_loading(
+    int top_screen,
+    const char* title,
+    const char* detail,
+    unsigned int frame
 );
 
 int ui_touch_in_buy(u16 tx, u16 ty);
