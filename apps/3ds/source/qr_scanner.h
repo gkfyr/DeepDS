@@ -25,6 +25,8 @@ typedef struct {
     int average_luma;
     int consecutive_errors;
     int preview_ready;
+    int error_stage;
+    unsigned int last_result;
 } QRScannerStatus;
 
 /**

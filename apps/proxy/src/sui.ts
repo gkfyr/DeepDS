@@ -16,6 +16,58 @@ export const CLOCK_ID = '0x6';
 
 export const suiClient = new SuiClient({ url: getFullnodeUrl(NETWORK) });
 
+const OBJECT_READY_ATTEMPTS = 12;
+const OBJECT_READY_DELAY_MS = 750;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForSharedObject(objectId: string): Promise<{
+  objectId: string;
+  initialSharedVersion: string | number;
+}> {
+  let lastError = 'object is not available';
+  for (let attempt = 1; attempt <= OBJECT_READY_ATTEMPTS; attempt++) {
+    const response = await suiClient.getObject({
+      id: objectId,
+      options: { showOwner: true, showType: true },
+    });
+    if (response.data) {
+      const owner = response.data.owner;
+      if (
+        owner &&
+        typeof owner === 'object' &&
+        'Shared' in owner
+      ) {
+        return {
+          objectId,
+          initialSharedVersion: owner.Shared.initial_shared_version,
+        };
+      }
+      lastError = `object ${objectId} is not shared`;
+    } else if (response.error) {
+      lastError = response.error.code;
+    }
+    await sleep(OBJECT_READY_DELAY_MS);
+  }
+  throw new Error(`PredictManager is not ready: ${lastError}`);
+}
+
+async function waitForDusdcCoins(address: string) {
+  for (let attempt = 1; attempt <= OBJECT_READY_ATTEMPTS; attempt++) {
+    const coins = await suiClient.getCoins({
+      owner: address,
+      coinType: DUSDC_TYPE,
+    });
+    if (coins.data.length > 0) return coins.data;
+    await sleep(OBJECT_READY_DELAY_MS);
+  }
+  throw new Error(
+    'Transferred dUSDC is not visible yet. Wait a few seconds and retry initialization.',
+  );
+}
+
 export function keypairFromSecret(secretKey: string): Ed25519Keypair {
   return Ed25519Keypair.fromSecretKey(secretKey);
 }
@@ -48,35 +100,61 @@ export async function getCoinBalance(address: string, coinType: string): Promise
 
 export async function createAndFundPredictManager(
   keypair: Ed25519Keypair,
+  existingManagerId?: string,
+  onManagerCreated?: (managerId: string) => Promise<void>,
 ): Promise<{ managerId: string; digest: string }> {
   const address = keypair.getPublicKey().toSuiAddress();
 
-  const createTx = new Transaction();
-  createTx.setSender(address);
-  createTx.moveCall({
-    target: `${PREDICT_PACKAGE_ID}::predict::create_manager`,
-  });
-  const created = await execute(createTx, keypair, true);
-  const managerEvent = created.events?.find((event) =>
-    event.type.endsWith('::predict_manager::PredictManagerCreated'),
-  );
-  const managerId = (managerEvent?.parsedJson as { manager_id?: string } | undefined)
-    ?.manager_id;
-  if (!managerId) throw new Error('PredictManagerCreated event was not returned');
-
-  const coins = await suiClient.getCoins({ owner: address, coinType: DUSDC_TYPE });
-  if (coins.data.length === 0) {
-    throw new Error('No dUSDC found in ephemeral wallet');
+  let managerId = existingManagerId;
+  if (!managerId) {
+    const createTx = new Transaction();
+    createTx.setSender(address);
+    createTx.moveCall({
+      target: `${PREDICT_PACKAGE_ID}::predict::create_manager`,
+    });
+    const created = await execute(createTx, keypair, true);
+    await suiClient.waitForTransaction({
+      digest: created.digest,
+      options: { showEffects: true },
+    });
+    const managerEvent = created.events?.find((event) =>
+      event.type.endsWith('::predict_manager::PredictManagerCreated'),
+    );
+    managerId = (
+      managerEvent?.parsedJson as { manager_id?: string } | undefined
+    )?.manager_id;
+    if (!managerId) {
+      throw new Error('PredictManagerCreated event was not returned');
+    }
+    if (onManagerCreated) await onManagerCreated(managerId);
   }
+
+  const [managerRef, coins] = await Promise.all([
+    waitForSharedObject(managerId),
+    waitForDusdcCoins(address),
+  ]);
 
   const depositTx = new Transaction();
   depositTx.setSender(address);
-  const [primary, ...rest] = coins.data.map((coin) => depositTx.object(coin.coinObjectId));
+  const [primary, ...rest] = coins.map((coin) =>
+    depositTx.objectRef({
+      objectId: coin.coinObjectId,
+      version: coin.version,
+      digest: coin.digest,
+    }),
+  );
   if (rest.length > 0) depositTx.mergeCoins(primary!, rest);
   depositTx.moveCall({
     target: `${PREDICT_PACKAGE_ID}::predict_manager::deposit`,
     typeArguments: [DUSDC_TYPE],
-    arguments: [depositTx.object(managerId), primary!],
+    arguments: [
+      depositTx.sharedObjectRef({
+        objectId: managerRef.objectId,
+        initialSharedVersion: managerRef.initialSharedVersion,
+        mutable: true,
+      }),
+      primary!,
+    ],
   });
   const deposited = await execute(depositTx, keypair);
 

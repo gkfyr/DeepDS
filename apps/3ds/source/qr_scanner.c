@@ -10,13 +10,14 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <malloc.h>
 #include <3ds.h>
 
 #define QR_FRAME_WIDTH       320
 #define QR_FRAME_HEIGHT      240
 #define QR_FRAME_PIXELS      (QR_FRAME_WIDTH * QR_FRAME_HEIGHT)
 #define QR_FRAME_BYTES       (QR_FRAME_PIXELS * sizeof(u16))
-#define QR_CAPTURE_TIMEOUT   180000000ULL
+#define QR_CAPTURE_TIMEOUT   1000000000ULL
 #define PREVIEW_TEX_WIDTH    512
 #define PREVIEW_TEX_HEIGHT   256
 #define CAMERA_ERROR_LIMIT   3
@@ -35,6 +36,20 @@ static Tex3DS_SubTexture s_preview_subtexture;
 static C2D_Image s_preview_image;
 static int s_preview_initialized = 0;
 static QRScannerStatus s_status;
+
+enum {
+    QR_CAM_STAGE_NONE = 0,
+    QR_CAM_STAGE_DECODER = 1,
+    QR_CAM_STAGE_FRAME_BUFFER = 2,
+    QR_CAM_STAGE_TEXTURE = 3,
+    QR_CAM_STAGE_SERVICE = 4,
+    QR_CAM_STAGE_CONFIG = 5,
+    QR_CAM_STAGE_ACTIVATE = 6,
+    QR_CAM_STAGE_CAPTURE = 7,
+    QR_CAM_STAGE_RECEIVE = 8,
+    QR_CAM_STAGE_WAIT = 9,
+    QR_CAM_STAGE_RESTART = 10,
+};
 
 /* --------------------------------------------------------
    Simple JSON field extractor
@@ -89,6 +104,12 @@ int qr_parse_payload(const char* json, QRResult* result) {
 
 static int camera_call_ok(Result rc) {
     return R_SUCCEEDED(rc);
+}
+
+static int scanner_fail(int stage, Result rc) {
+    s_status.error_stage = stage;
+    s_status.last_result = (unsigned int)rc;
+    return -1;
 }
 
 /* PICA textures use 8x8 Morton-order tiles. */
@@ -155,16 +176,22 @@ static int rgb565_to_grayscale_and_preview(
 }
 
 static int restart_capture(void) {
-    if (!s_cam_initialized || !s_camera_activated) return -1;
+    if (!s_cam_initialized || !s_camera_activated) {
+        return scanner_fail(QR_CAM_STAGE_RESTART, (Result)-1);
+    }
 
     if (s_capture_started) {
         CAMU_StopCapture(PORT_CAM1);
         s_capture_started = 0;
     }
-    CAMU_ClearBuffer(PORT_CAM1);
-    if (R_FAILED(CAMU_StartCapture(PORT_CAM1))) return -1;
+    Result rc = CAMU_ClearBuffer(PORT_CAM1);
+    if (R_FAILED(rc)) return scanner_fail(QR_CAM_STAGE_RESTART, rc);
+    rc = CAMU_StartCapture(PORT_CAM1);
+    if (R_FAILED(rc)) return scanner_fail(QR_CAM_STAGE_RESTART, rc);
     s_capture_started = 1;
     s_status.consecutive_errors = 0;
+    s_status.error_stage = QR_CAM_STAGE_NONE;
+    s_status.last_result = 0;
     return 0;
 }
 
@@ -174,14 +201,19 @@ int qr_scanner_init(void) {
 
     s_decoder = quirc_new();
     if (!s_decoder || quirc_resize(s_decoder, QR_FRAME_WIDTH, QR_FRAME_HEIGHT) < 0) {
-        qr_scanner_exit();
-        return -1;
+        scanner_fail(QR_CAM_STAGE_DECODER, (Result)-1);
+        goto fail;
     }
 
-    s_camera_frame = (u16*)linearAlloc(QR_FRAME_BYTES);
+    /*
+     * Match libctru's camera examples: CAMU writes into a page-aligned
+     * application heap buffer. This is more broadly compatible than linearAlloc
+     * for camera-service DMA on older hardware revisions.
+     */
+    s_camera_frame = (u16*)memalign(0x1000, QR_FRAME_BYTES);
     if (!s_camera_frame) {
-        qr_scanner_exit();
-        return -1;
+        scanner_fail(QR_CAM_STAGE_FRAME_BUFFER, (Result)-1);
+        goto fail;
     }
 
     if (!C3D_TexInit(
@@ -190,8 +222,8 @@ int qr_scanner_init(void) {
         PREVIEW_TEX_HEIGHT,
         GPU_RGB565
     )) {
-        qr_scanner_exit();
-        return -1;
+        scanner_fail(QR_CAM_STAGE_TEXTURE, (Result)-1);
+        goto fail;
     }
     s_preview_initialized = 1;
     memset(
@@ -217,48 +249,87 @@ int qr_scanner_init(void) {
     s_preview_image.tex = &s_preview_texture;
     s_preview_image.subtex = &s_preview_subtexture;
 
-    if (!camera_call_ok(camInit())) {
-        qr_scanner_exit();
-        return -1;
+    Result rc = camInit();
+    if (!camera_call_ok(rc)) {
+        scanner_fail(QR_CAM_STAGE_SERVICE, rc);
+        goto fail;
     }
     s_cam_initialized = 1;
 
-    if (!camera_call_ok(CAMU_SetSize(SELECT_OUT1, SIZE_QVGA, CONTEXT_A)) ||
-        !camera_call_ok(CAMU_SetOutputFormat(SELECT_OUT1, OUTPUT_RGB_565, CONTEXT_A)) ||
-        !camera_call_ok(CAMU_SetFrameRate(SELECT_OUT1, FRAME_RATE_10)) ||
-        !camera_call_ok(CAMU_SetNoiseFilter(SELECT_OUT1, true)) ||
-        !camera_call_ok(CAMU_SetAutoExposure(SELECT_OUT1, true)) ||
-        !camera_call_ok(CAMU_SetAutoWhiteBalance(SELECT_OUT1, true)) ||
-        !camera_call_ok(CAMU_SetTrimming(PORT_CAM1, false)) ||
-        !camera_call_ok(CAMU_GetMaxBytes(
-            &s_transfer_unit,
-            QR_FRAME_WIDTH,
-            QR_FRAME_HEIGHT
-        )) ||
-        !camera_call_ok(CAMU_SetTransferBytes(
-            PORT_CAM1,
-            s_transfer_unit,
-            QR_FRAME_WIDTH,
-            QR_FRAME_HEIGHT
-        ))) {
-        qr_scanner_exit();
-        return -1;
-    }
+    /*
+     * The official libctru examples configure both outer sensors together,
+     * even when only CAM1 is received. Some hardware revisions reject a
+     * partial outer-camera configuration.
+     */
+#define CAM_CONFIG(call) \
+    do { \
+        rc = (call); \
+        if (R_FAILED(rc)) { \
+            scanner_fail(QR_CAM_STAGE_CONFIG, rc); \
+            goto fail; \
+        } \
+    } while (0)
 
-    if (!camera_call_ok(CAMU_Activate(SELECT_OUT1))) {
-        qr_scanner_exit();
-        return -1;
+    CAM_CONFIG(CAMU_SetSize(
+        SELECT_OUT1_OUT2,
+        SIZE_QVGA,
+        CONTEXT_A
+    ));
+    CAM_CONFIG(CAMU_SetOutputFormat(
+        SELECT_OUT1_OUT2,
+        OUTPUT_RGB_565,
+        CONTEXT_A
+    ));
+    CAM_CONFIG(CAMU_SetFrameRate(SELECT_OUT1_OUT2, FRAME_RATE_10));
+    CAM_CONFIG(CAMU_SetNoiseFilter(SELECT_OUT1_OUT2, true));
+    CAM_CONFIG(CAMU_SetAutoExposure(SELECT_OUT1_OUT2, true));
+    CAM_CONFIG(CAMU_SetAutoWhiteBalance(SELECT_OUT1_OUT2, true));
+    CAM_CONFIG(CAMU_SetTrimming(PORT_CAM1, false));
+    CAM_CONFIG(CAMU_GetMaxBytes(
+        &s_transfer_unit,
+        QR_FRAME_WIDTH,
+        QR_FRAME_HEIGHT
+    ));
+    CAM_CONFIG(CAMU_SetTransferBytes(
+        PORT_CAM1,
+        s_transfer_unit,
+        QR_FRAME_WIDTH,
+        QR_FRAME_HEIGHT
+    ));
+#undef CAM_CONFIG
+
+    rc = CAMU_Activate(SELECT_OUT1);
+    if (!camera_call_ok(rc)) {
+        scanner_fail(QR_CAM_STAGE_ACTIVATE, rc);
+        goto fail;
     }
     s_camera_activated = 1;
 
-    if (!camera_call_ok(CAMU_ClearBuffer(PORT_CAM1)) ||
-        !camera_call_ok(CAMU_StartCapture(PORT_CAM1))) {
-        qr_scanner_exit();
-        return -1;
+    rc = CAMU_ClearBuffer(PORT_CAM1);
+    if (!camera_call_ok(rc)) {
+        scanner_fail(QR_CAM_STAGE_CAPTURE, rc);
+        goto fail;
+    }
+    rc = CAMU_StartCapture(PORT_CAM1);
+    if (!camera_call_ok(rc)) {
+        scanner_fail(QR_CAM_STAGE_CAPTURE, rc);
+        goto fail;
     }
     s_capture_started = 1;
     s_camera_ready = 1;
+    s_status.error_stage = QR_CAM_STAGE_NONE;
+    s_status.last_result = 0;
     return 0;
+
+fail:
+    {
+        int error_stage = s_status.error_stage;
+        unsigned int last_result = s_status.last_result;
+        qr_scanner_exit();
+        s_status.error_stage = error_stage;
+        s_status.last_result = last_result;
+    }
+    return -1;
 }
 
 void qr_scanner_exit(void) {
@@ -278,7 +349,7 @@ void qr_scanner_exit(void) {
     }
 
     if (s_camera_frame) {
-        linearFree(s_camera_frame);
+        free(s_camera_frame);
         s_camera_frame = NULL;
     }
 
@@ -293,7 +364,7 @@ void qr_scanner_exit(void) {
     }
 
     s_transfer_unit = 0;
-    memset(&s_status, 0, sizeof(s_status));
+    s_status.preview_ready = 0;
 }
 
 int qr_scanner_update(QRResult* result) {
@@ -310,23 +381,23 @@ int qr_scanner_update(QRResult* result) {
         (s16)s_transfer_unit
     );
     if (R_FAILED(rc)) {
+        s_status.error_stage = QR_CAM_STAGE_RECEIVE;
+        s_status.last_result = (unsigned int)rc;
         s_status.consecutive_errors++;
-        if (s_status.consecutive_errors >= CAMERA_ERROR_LIMIT) {
-            return restart_capture();
-        }
-        return 0;
+        return restart_capture();
     }
 
     rc = svcWaitSynchronization(receive_event, QR_CAPTURE_TIMEOUT);
     svcCloseHandle(receive_event);
     if (R_FAILED(rc)) {
+        s_status.error_stage = QR_CAM_STAGE_WAIT;
+        s_status.last_result = (unsigned int)rc;
         s_status.consecutive_errors++;
-        if (s_status.consecutive_errors >= CAMERA_ERROR_LIMIT) {
-            return restart_capture();
-        }
-        return 0;
+        return restart_capture();
     }
     s_status.consecutive_errors = 0;
+    s_status.error_stage = QR_CAM_STAGE_NONE;
+    s_status.last_result = 0;
     s_status.frames_captured++;
 
     int width = 0;

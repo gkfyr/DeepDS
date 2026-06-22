@@ -231,7 +231,13 @@ int main(int argc, char* argv[]) {
             int has_preview = qr_scanner_get_preview(&camera_preview);
 
             if (!g_qr_scanner_ready) {
-                snprintf(scan_message, sizeof(scan_message), "Camera unavailable - press A");
+                snprintf(
+                    scan_message,
+                    sizeof(scan_message),
+                    "CAM E%d 0x%08lX  X retry",
+                    scan_status.error_stage,
+                    (unsigned long)scan_status.last_result
+                );
             } else if (scan_status.consecutive_errors > 0) {
                 snprintf(
                     scan_message,
@@ -275,6 +281,9 @@ int main(int argc, char* argv[]) {
                 } else {
                     g_qr_scanner_ready = (qr_scanner_init() == 0);
                 }
+            } else if (keys_down & KEY_X) {
+                qr_scanner_exit();
+                g_qr_scanner_ready = (qr_scanner_init() == 0);
             }
 
             /* Draw QR scan screen */

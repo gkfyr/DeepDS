@@ -12,6 +12,7 @@ import {
   deleteSession,
   getSession,
   isSessionStorageConfigurationError,
+  markSessionManagerFunded,
   setSessionManager,
 } from '../session.js';
 import {
@@ -83,7 +84,7 @@ router.post('/:sid/initialize', async (req: Request, res: Response) => {
     res.status(404).json({ ok: 0, error: 'Session not found or expired' });
     return;
   }
-  if (session.managerId) {
+  if (session.managerId && session.managerFunded) {
     res.json({ ok: 1, managerId: session.managerId });
     return;
   }
@@ -91,7 +92,7 @@ router.post('/:sid/initialize', async (req: Request, res: Response) => {
   try {
     if (DUMMY_MODE) {
       const managerId = mockId('mock_manager');
-      await setSessionManager(req.params.sid, managerId);
+      await setSessionManager(req.params.sid, managerId, true);
       res.json({
         ok: 1,
         managerId,
@@ -103,8 +104,12 @@ router.post('/:sid/initialize', async (req: Request, res: Response) => {
 
     const result = await createAndFundPredictManager(
       keypairFromSecret(session.keypairSecretKey),
+      session.managerId,
+      async (managerId) => {
+        await setSessionManager(req.params.sid, managerId, false);
+      },
     );
-    await setSessionManager(req.params.sid, result.managerId);
+    await markSessionManagerFunded(req.params.sid);
     res.json({ ok: 1, managerId: result.managerId, digest: result.digest });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

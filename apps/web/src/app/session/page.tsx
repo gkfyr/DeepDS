@@ -51,6 +51,12 @@ interface SessionState {
   managerId: string;
 }
 
+interface PendingSession {
+  sid: string;
+  ephemeralAddress: string;
+  funded: boolean;
+}
+
 // Gas amount to transfer to ephemeral address for transaction fees
 const GAS_ALLOWANCE_MIST = 50_000_000n; // 0.05 SUI
 
@@ -67,6 +73,9 @@ export default function SessionPage() {
 
   const [step, setStep] = useState<Step>('idle');
   const [session, setSession] = useState<SessionState | null>(null);
+  const [pendingSession, setPendingSession] = useState<PendingSession | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [dusdcAllowance, setDusdcAllowance] = useState(DEFAULT_DUSDC_ALLOWANCE);
@@ -105,6 +114,7 @@ export default function SessionPage() {
         },
         proxyUrl,
       );
+      setPendingSession({ sid, ephemeralAddress: address, funded: false });
       addLog('Session registered successfully!');
 
       if (DUMMY_MODE) {
@@ -177,6 +187,7 @@ export default function SessionPage() {
       });
 
       setTxDigest(result.digest);
+      setPendingSession({ sid, ephemeralAddress: address, funded: true });
       addLog(`✅ Transaction confirmed! Digest: ${result.digest.slice(0, 20)}...`);
       addLog('Creating ephemeral PredictManager...');
 
@@ -200,6 +211,32 @@ export default function SessionPage() {
     }
   };
 
+  const retryManagerSetup = async () => {
+    if (!pendingSession?.funded) return;
+    setError(null);
+    setStep('registering');
+    addLog('Retrying PredictManager setup with the funded session...');
+    try {
+      const initialized = await initializeSession(
+        pendingSession.sid,
+        proxyUrl,
+      );
+      addLog(`✅ PredictManager ready: ${initialized.managerId.slice(0, 18)}...`);
+      setSession({
+        sid: pendingSession.sid,
+        ephemeralAddress: pendingSession.ephemeralAddress,
+        managerId: initialized.managerId,
+      });
+      setPendingSession(null);
+      setStep('active');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+      setStep('error');
+      addLog(`❌ Retry failed: ${msg}`);
+    }
+  };
+
   const endSession = async () => {
     if (!session) return;
     await revokeSession(session.sid, proxyUrl).catch(() => {});
@@ -207,6 +244,7 @@ export default function SessionPage() {
     setStep('idle');
     setLogs([]);
     setTxDigest(null);
+    setPendingSession(null);
   };
 
   if (!account && !DUMMY_MODE) {
@@ -325,9 +363,17 @@ export default function SessionPage() {
                     <button
                       id="create-session-btn"
                       className="primary-button w-full"
-                      onClick={createSession}
+                      onClick={
+                        pendingSession?.funded
+                          ? retryManagerSetup
+                          : createSession
+                      }
                     >
-                      {DUMMY_MODE ? 'Create dummy session' : 'Create and fund session'}
+                      {pendingSession?.funded
+                        ? 'Retry manager setup'
+                        : DUMMY_MODE
+                          ? 'Create dummy session'
+                          : 'Create and fund session'}
                       <span aria-hidden="true">→</span>
                     </button>
                   ) : step === 'active' ? (

@@ -22,6 +22,7 @@ interface StoredSession {
   keypairSecretKey: string;
   ephemeralAddress: string;
   managerId?: string;
+  managerFunded?: string;
   mockBalance?: string;
   userAddress: string;
   expiresAt: string;
@@ -113,6 +114,9 @@ function toStoredSession(session: EphemeralSession): StoredSession {
     keypairSecretKey: encryptSecret(session.keypairSecretKey),
     ephemeralAddress: session.ephemeralAddress,
     ...(session.managerId ? { managerId: session.managerId } : {}),
+    ...(session.managerFunded !== undefined
+      ? { managerFunded: session.managerFunded ? '1' : '0' }
+      : {}),
     ...(session.mockBalance !== undefined
       ? { mockBalance: session.mockBalance.toString() }
       : {}),
@@ -127,6 +131,9 @@ function fromStoredSession(stored: StoredSession): EphemeralSession {
     keypairSecretKey: decryptSecret(String(stored.keypairSecretKey)),
     ephemeralAddress: String(stored.ephemeralAddress),
     ...(stored.managerId ? { managerId: String(stored.managerId) } : {}),
+    ...(stored.managerFunded !== undefined
+      ? { managerFunded: stored.managerFunded === '1' }
+      : {}),
     ...(stored.mockBalance !== undefined
       ? { mockBalance: BigInt(String(stored.mockBalance)) }
       : {}),
@@ -196,10 +203,24 @@ export async function createSession(
 export async function setSessionManager(
   sid: string,
   managerId: string,
+  funded = false,
 ): Promise<void> {
   const session = await getSession(sid);
   if (!session) throw new Error('Session not found or expired');
   session.managerId = managerId;
+  session.managerFunded = funded;
+
+  if (redis) {
+    await saveRedisSession(sid, session);
+  } else {
+    memoryStore.set(sid, session);
+  }
+}
+
+export async function markSessionManagerFunded(sid: string): Promise<void> {
+  const session = await getSession(sid);
+  if (!session?.managerId) throw new Error('Session manager is not initialized');
+  session.managerFunded = true;
 
   if (redis) {
     await saveRedisSession(sid, session);
