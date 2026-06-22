@@ -29,6 +29,8 @@ import {
 } from '../../lib/proxy';
 import { SessionQR } from '../../components/SessionQR';
 import { LiveStatus } from '../../components/LiveStatus';
+import { Brand } from '../../components/Brand';
+import Image from 'next/image';
 import Link from 'next/link';
 
 type Step =
@@ -204,7 +206,14 @@ export default function SessionPage() {
     return (
       <main className="grid min-h-screen place-items-center p-5">
         <div className="soft-card w-full max-w-md p-8 text-center sm:p-10">
-          <div className="brand-mark mx-auto">DS</div>
+          <Image
+            src="/deepds-logo.png"
+            alt="DeepDS"
+            width={80}
+            height={80}
+            priority
+            className="mx-auto rounded-[22px] border border-ds-line bg-white p-1 shadow-sm"
+          />
           <p className="eyebrow mt-7">Wallet disconnected</p>
           <h1 className="mt-3 text-3xl font-extrabold tracking-[-0.05em] text-ds-ink">
             Connect before pairing.
@@ -224,10 +233,7 @@ export default function SessionPage() {
     <main className="min-h-screen">
       <div className="site-shell">
         <header className="site-header">
-          <Link href="/" className="brand" aria-label="DeepDS home">
-            <span className="brand-mark">DS</span>
-            <span className="text-xl">DeepDS</span>
-          </Link>
+          <Brand />
           <div className="flex items-center gap-2 rounded-full border border-ds-line bg-white px-3 py-2 font-mono text-[10px] text-ds-muted">
             <span className="status-dot" />
             {DUMMY_MODE

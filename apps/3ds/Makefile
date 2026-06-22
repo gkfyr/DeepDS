@@ -17,7 +17,7 @@ BUILD       := build
 SOURCES     := source vendor/quirc
 DATA        := data
 INCLUDES    := include source vendor/quirc
-ROMFS       :=
+ROMFS       := romfs
 
 #---------------------------------------------------------------------------------
 # Options for code generation

@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit';
+import { Brand } from '../components/Brand';
 
 const DUMMY_MODE = process.env.NEXT_PUBLIC_DUMMY_MODE === 'true';
 
@@ -10,7 +12,13 @@ function DeepDsDevice() {
     <div className="device-shell" aria-label="DeepDS dual-screen trading terminal preview">
       <div className="mb-3 flex items-center justify-between px-2">
         <div className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-ds-blue" />
+          <Image
+            src="/deepds-logo.png"
+            alt=""
+            width={20}
+            height={20}
+            className="rounded-[5px] bg-white object-contain"
+          />
           <span className="h-2 w-2 rounded-full bg-ds-coral" />
         </div>
         <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-ds-muted">
@@ -99,10 +107,7 @@ export default function HomePage() {
     <main className="min-h-screen overflow-hidden">
       <div className="site-shell">
         <header className="site-header">
-          <Link href="/" className="brand" aria-label="DeepDS home">
-            <span className="brand-mark">DS</span>
-            <span className="text-xl">DeepDS</span>
-          </Link>
+          <Brand />
           <div className="flex items-center gap-3">
             <span className="hidden rounded-full bg-ds-blue-soft px-3 py-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-ds-ink sm:inline">
               {DUMMY_MODE ? 'Local dummy' : 'Sui testnet'}

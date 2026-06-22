@@ -180,6 +180,7 @@ int main(int argc, char* argv[]) {
     /* ---- System initialization ---- */
     gfxInitDefault();
     gfxSet3D(false);  /* No 3D effect needed */
+    romfsInit();
 
     /* citro3d + citro2d init */
     C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
@@ -372,6 +373,7 @@ int main(int argc, char* argv[]) {
     ui_exit();
     C2D_Fini();
     C3D_Fini();
+    romfsExit();
     gfxExit();
 
     return 0;

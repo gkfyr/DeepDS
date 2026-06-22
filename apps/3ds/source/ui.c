@@ -8,13 +8,26 @@
 #include <3ds.h>
 
 static C2D_TextBuf s_text_buf;
+static C2D_SpriteSheet s_logo_sheet;
+static C2D_Image s_logo_image;
+static int s_logo_ready = 0;
 static u32 s_frame = 0;
 
 void ui_init(void) {
     s_text_buf = C2D_TextBufNew(16384);
+    s_logo_sheet = C2D_SpriteSheetLoad("romfs:/gfx/logo.t3x");
+    if (s_logo_sheet) {
+        s_logo_image = C2D_SpriteSheetGetImage(s_logo_sheet, 0);
+        s_logo_ready = 1;
+    }
 }
 
 void ui_exit(void) {
+    if (s_logo_sheet) {
+        C2D_SpriteSheetFree(s_logo_sheet);
+        s_logo_sheet = NULL;
+        s_logo_ready = 0;
+    }
     if (s_text_buf) {
         C2D_TextBufDelete(s_text_buf);
         s_text_buf = NULL;
@@ -66,8 +79,20 @@ static void draw_text(const char* str, float x, float y, float size, u32 color) 
 }
 
 static void draw_brand(float width, const char* state_name) {
-    draw_card(10, 8, 34, 22, COL_INK, COL_INK);
-    draw_text("DS", 19, 24, 0.42f, COL_WHITE);
+    draw_card(10, 8, 34, 22, COL_SURFACE, COL_LINE);
+    if (s_logo_ready) {
+        C2D_DrawImageAt(
+            s_logo_image,
+            17,
+            9,
+            0.6f,
+            NULL,
+            0.3125f,
+            0.3125f
+        );
+    } else {
+        draw_text("DS", 19, 24, 0.42f, COL_BLUE);
+    }
     draw_text("DeepDS", 51, 24, 0.52f, COL_INK);
 
     float pill_w = 64;
