@@ -22,6 +22,13 @@ int session_set(const char* url, const char* sid) {
     strncpy(g_session.sid, sid, SESSION_SID_MAX - 1);
     g_session.url[SESSION_URL_MAX - 1] = '\0';
     g_session.sid[SESSION_SID_MAX - 1] = '\0';
+
+    /* Avoid Vercel redirects from URLs such as https://host.app//api/... */
+    size_t url_len = strlen(g_session.url);
+    while (url_len > 8 && g_session.url[url_len - 1] == '/') {
+        g_session.url[--url_len] = '\0';
+    }
+
     g_session.is_valid = 1;
     return 1;
 }

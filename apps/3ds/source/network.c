@@ -16,7 +16,19 @@
 
 /* SOC buffer — required for socket operations on 3DS */
 #define SOC_BUFFER_SIZE  (1024 * 256)  /* 256 KB */
+#define HTTPC_BUFFER_SIZE (1024 * 256)
+#define HTTP_TIMEOUT_NS    15000000000ULL
 static u32* soc_buf = NULL;
+static unsigned int s_last_result = 0;
+
+static int network_fail(Result rc) {
+    s_last_result = (unsigned int)rc;
+    return -1;
+}
+
+unsigned int network_last_result(void) {
+    return s_last_result;
+}
 
 /**
  * Koyeb and other public hosts expose HTTPS-only endpoints.
@@ -33,7 +45,13 @@ static Result configure_context(httpcContext* ctx, const char* url) {
     );
     if (R_FAILED(rc)) return rc;
 
-    rc = httpcSetKeepAlive(ctx, HTTPC_KEEPALIVE_ENABLED);
+    rc = httpcSetKeepAlive(ctx, HTTPC_KEEPALIVE_DISABLED);
+    if (R_FAILED(rc)) return rc;
+
+    rc = httpcAddRequestHeaderField(ctx, "Accept", "application/json");
+    if (R_FAILED(rc)) return rc;
+
+    rc = httpcAddRequestHeaderField(ctx, "Connection", "close");
     if (R_FAILED(rc)) return rc;
 
     if (strncmp(url, "https://", 8) == 0) {
@@ -45,6 +63,7 @@ static Result configure_context(httpcContext* ctx, const char* url) {
 }
 
 int network_init(void) {
+    s_last_result = 0;
     soc_buf = (u32*)memalign(0x1000, SOC_BUFFER_SIZE);
     if (!soc_buf) return -1;
 
@@ -56,7 +75,8 @@ int network_init(void) {
     }
 
     /* Initialize httpc service */
-    rc = httpcInit(0);
+    /* POST/PUT requests require upload shared memory. */
+    rc = httpcInit(HTTPC_BUFFER_SIZE);
     if (R_FAILED(rc)) {
         socExit();
         free(soc_buf);
@@ -81,8 +101,12 @@ void network_exit(void) {
  */
 static int read_response(httpcContext* ctx, char* buf, size_t buf_sz) {
     u32 status = 0;
-    Result rc = httpcGetResponseStatusCode(ctx, &status);
-    if (R_FAILED(rc)) return -1;
+    Result rc = httpcGetResponseStatusCodeTimeout(
+        ctx,
+        &status,
+        HTTP_TIMEOUT_NS
+    );
+    if (R_FAILED(rc)) return network_fail(rc);
 
     /* Read body */
     u32 offset = 0;
@@ -96,6 +120,7 @@ static int read_response(httpcContext* ctx, char* buf, size_t buf_sz) {
         break;
     }
     buf[offset] = '\0';
+    s_last_result = 0;
     return (int)status;
 }
 
@@ -104,18 +129,18 @@ int http_get(const char* url, char* buf, size_t buf_sz) {
 
     httpcContext ctx;
     Result rc = httpcOpenContext(&ctx, HTTPC_METHOD_GET, url, 0);
-    if (R_FAILED(rc)) return -1;
+    if (R_FAILED(rc)) return network_fail(rc);
 
     rc = configure_context(&ctx, url);
     if (R_FAILED(rc)) {
         httpcCloseContext(&ctx);
-        return -1;
+        return network_fail(rc);
     }
 
     rc = httpcBeginRequest(&ctx);
     if (R_FAILED(rc)) {
         httpcCloseContext(&ctx);
-        return -1;
+        return network_fail(rc);
     }
 
     int status = read_response(&ctx, buf, buf_sz);
@@ -128,12 +153,12 @@ int http_post(const char* url, const char* body, char* buf, size_t buf_sz) {
 
     httpcContext ctx;
     Result rc = httpcOpenContext(&ctx, HTTPC_METHOD_POST, url, 0);
-    if (R_FAILED(rc)) return -1;
+    if (R_FAILED(rc)) return network_fail(rc);
 
     rc = configure_context(&ctx, url);
     if (R_FAILED(rc)) {
         httpcCloseContext(&ctx);
-        return -1;
+        return network_fail(rc);
     }
 
     rc = httpcAddRequestHeaderField(
@@ -143,7 +168,7 @@ int http_post(const char* url, const char* body, char* buf, size_t buf_sz) {
     );
     if (R_FAILED(rc)) {
         httpcCloseContext(&ctx);
-        return -1;
+        return network_fail(rc);
     }
 
     if (body && strlen(body) > 0) {
@@ -154,14 +179,14 @@ int http_post(const char* url, const char* body, char* buf, size_t buf_sz) {
         );
         if (R_FAILED(rc)) {
             httpcCloseContext(&ctx);
-            return -1;
+            return network_fail(rc);
         }
     }
 
     rc = httpcBeginRequest(&ctx);
     if (R_FAILED(rc)) {
         httpcCloseContext(&ctx);
-        return -1;
+        return network_fail(rc);
     }
 
     int status = read_response(&ctx, buf, buf_sz);

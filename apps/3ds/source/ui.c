@@ -135,6 +135,16 @@ static void draw_brand(float width, const char* state_name) {
 }
 
 static void draw_empty_top(const char* state_name) {
+    if (strcmp(state_name, "ERROR") == 0) {
+        draw_text("Connection failed", 20, 76, 0.82f, COL_CORAL);
+        draw_text("The session or server could not be reached.", 20, 105, 0.41f, COL_MUTED);
+        draw_card(20, 140, 360, 58, COL_CORAL_SOFT, COL_CORAL);
+        draw_text("A", 38, 178, 0.72f, COL_CORAL);
+        draw_text("Return to pairing", 75, 172, 0.52f, COL_INK);
+        draw_text("Check the error details below.", 75, 190, 0.31f, COL_MUTED);
+        return;
+    }
+
     draw_text("Scan to pair", 20, 70, 0.82f, COL_INK);
     draw_text("Point the outer camera at the QR code", 20, 99, 0.42f, COL_MUTED);
     draw_text("shown on the DeepDS web app.", 20, 118, 0.42f, COL_MUTED);
@@ -146,11 +156,6 @@ static void draw_empty_top(const char* state_name) {
     draw_rect(42, 192, 42, 4, COL_BLUE);
     draw_text("SCANNING", 102, 169, 0.54f, COL_BLUE);
     draw_text("A  Enter details manually", 102, 194, 0.36f, COL_INK);
-
-    if (strcmp(state_name, "ERROR") == 0) {
-        draw_text("Connection failed", 20, 76, 0.82f, COL_CORAL);
-        draw_text("Press A to try pairing again.", 20, 105, 0.45f, COL_MUTED);
-    }
 }
 
 void ui_draw_qr_top(
@@ -266,7 +271,7 @@ static void draw_action_button(
 static void draw_pairing_bottom(const char* message) {
     draw_text("Connect DeepDS", 18, 54, 0.72f, COL_INK);
     draw_text("Keep the full QR and white border visible.", 18, 80, 0.35f, COL_MUTED);
-    draw_text("QR CAMERA v0.6", 220, 54, 0.25f, COL_BLUE);
+    draw_text("QR CAMERA v0.7", 220, 54, 0.25f, COL_BLUE);
 
     draw_card(18, 98, 284, 75, COL_SURFACE, COL_BLUE);
     draw_rect(34, 114, 28, 3, COL_BLUE);

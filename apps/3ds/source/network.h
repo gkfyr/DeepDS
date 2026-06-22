@@ -45,3 +45,9 @@ int network_init(void);
  * Call at app exit.
  */
 void network_exit(void);
+
+/**
+ * Last libctru Result produced by the HTTP layer, or 0 after a completed HTTP
+ * response. Useful for displaying TLS/transport failures on-device.
+ */
+unsigned int network_last_result(void);

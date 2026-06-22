@@ -180,11 +180,8 @@ static int rgb565_to_grayscale_and_preview(
     unsigned long luma_sum = 0;
 
     for (int y = 0; y < QR_FRAME_HEIGHT; y++) {
-        /*
-         * CAM frames are bottom-up. Flip rows here so both the preview and
-         * quirc see the same upright camera image.
-         */
-        int source_y = QR_FRAME_HEIGHT - 1 - y;
+        /* CAMU already supplies rows in the orientation expected here. */
+        int source_y = y;
         for (int x = 0; x < QR_FRAME_WIDTH; x++) {
             u16 pixel = source[source_y * QR_FRAME_WIDTH + x];
             u8 red = (u8)((pixel & 0x1f) << 3);

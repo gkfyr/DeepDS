@@ -164,12 +164,15 @@ static int enter_session_manual(void) {
 }
 
 /* ---- Verify session with proxy ---- */
-static int verify_session(void) {
-    char url[256], buf[NET_BUF_SIZE];
+static int verify_session(char* response, size_t response_size) {
+    char url[256], buf[NET_BUF_SIZE] = {0};
     snprintf(url, sizeof(url), "%s/api/session/%s", g_session.url, g_session.sid);
 
     int status = http_get(url, buf, sizeof(buf));
-    return (status == 200);
+    if (response && response_size > 0) {
+        snprintf(response, response_size, "%.120s", buf);
+    }
+    return status;
 }
 
 /* ==============================================================
@@ -334,22 +337,45 @@ int main(int argc, char* argv[]) {
             C3D_FrameEnd(0);
 
         } else if (g_state == STATE_CONNECTING) {
+            char verify_response[128] = {0};
             if (!net_ok) {
                 snprintf(g_error_msg, sizeof(g_error_msg), "NETWORK INIT FAILED");
                 g_state = STATE_ERROR;
-            } else if (verify_session()) {
+            } else {
+                int verify_status = verify_session(
+                    verify_response,
+                    sizeof(verify_response)
+                );
+                if (verify_status == 200) {
                 /* Connected! Fetch initial data */
                 fetch_market_data();
                 fetch_balance();
                 g_state = STATE_TRADING;
-            } else {
-                snprintf(
-                    g_error_msg,
-                    sizeof(g_error_msg),
-                    "PROXY UNREACHABLE: %.100s",
-                    g_session.url
-                );
-                g_state = STATE_ERROR;
+                } else if (verify_status == 404) {
+                    snprintf(
+                        g_error_msg,
+                        sizeof(g_error_msg),
+                        "SESSION NOT FOUND OR EXPIRED"
+                    );
+                    g_state = STATE_ERROR;
+                } else if (verify_status > 0) {
+                    snprintf(
+                        g_error_msg,
+                        sizeof(g_error_msg),
+                        "PROXY HTTP %d: %.80s",
+                        verify_status,
+                        verify_response
+                    );
+                    g_state = STATE_ERROR;
+                } else {
+                    snprintf(
+                        g_error_msg,
+                        sizeof(g_error_msg),
+                        "HTTPS ERROR 0x%08lX",
+                        (unsigned long)network_last_result()
+                    );
+                    g_state = STATE_ERROR;
+                }
             }
 
         } else if (g_state == STATE_TRADING) {
