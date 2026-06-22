@@ -4,6 +4,7 @@ export interface EphemeralSession {
   keypairSecretKey: string;      // Bech32-encoded Ed25519 secret key
   ephemeralAddress: string;
   managerId?: string;            // PredictManager owned by the ephemeral key
+  mockBalance?: bigint;          // Dummy mode dUSDC balance in base units
   userAddress: string;           // User's main wallet address (for display)
   expiresAt: number;             // Unix timestamp (ms)
   createdAt: number;
@@ -43,4 +44,5 @@ export interface SessionCreateRequest {
   privkey: string;               // Bech32 secret key
   ephemeralAddress: string;
   userAddress: string;
+  allowance?: string;
 }

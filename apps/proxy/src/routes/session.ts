@@ -17,6 +17,7 @@ import {
   createAndFundPredictManager,
   keypairFromSecret,
 } from '../sui.js';
+import { DUMMY_MODE, mockId } from '../config.js';
 import type { SessionCreateRequest } from '../types.js';
 
 const router = Router();
@@ -24,7 +25,7 @@ const router = Router();
 // POST /api/session
 // Body: { sid, privkey, ephemeralAddress, userAddress }
 router.post('/', (req: Request, res: Response) => {
-  const { sid, privkey, ephemeralAddress, userAddress } =
+  const { sid, privkey, ephemeralAddress, userAddress, allowance } =
     req.body as SessionCreateRequest;
 
   if (!sid || !privkey || !ephemeralAddress || !userAddress) {
@@ -44,8 +45,17 @@ router.post('/', (req: Request, res: Response) => {
       res.status(400).json({ ok: 0, error: 'Private key/address mismatch' });
       return;
     }
-    createSession(sid, privkey, ephemeralAddress, userAddress);
-    res.json({ ok: 1, sid, expires_in: 3600 });
+    const mockBalance = DUMMY_MODE
+      ? BigInt(Math.max(1, Math.round(Number(allowance ?? '5') * 1_000_000)))
+      : undefined;
+    createSession(
+      sid,
+      privkey,
+      ephemeralAddress,
+      userAddress,
+      mockBalance,
+    );
+    res.json({ ok: 1, sid, expires_in: 3600, mode: DUMMY_MODE ? 'dummy' : 'live' });
   } catch (err) {
     console.error('[session] Create error:', err);
     res.status(500).json({ ok: 0, error: 'Internal error' });
@@ -64,6 +74,18 @@ router.post('/:sid/initialize', async (req: Request, res: Response) => {
   }
 
   try {
+    if (DUMMY_MODE) {
+      const managerId = mockId('mock_manager');
+      setSessionManager(req.params.sid, managerId);
+      res.json({
+        ok: 1,
+        managerId,
+        digest: mockId('mock_setup'),
+        mode: 'dummy',
+      });
+      return;
+    }
+
     const result = await createAndFundPredictManager(
       keypairFromSecret(session.keypairSecretKey),
     );
@@ -99,6 +121,7 @@ router.get('/:sid', (req: Request, res: Response) => {
     managerId: session.managerId ?? null,
     createdAt: session.createdAt,
     expiresAt: session.expiresAt,
+    mode: DUMMY_MODE ? 'dummy' : 'live',
   });
 });
 

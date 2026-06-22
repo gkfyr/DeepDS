@@ -1,9 +1,5 @@
 /**
- * ui.c — DeepDS UI Rendering (citro2d)
- *
- * Renders the DeepBook trading interface on the 3DS dual screens:
- * - Top (400x240): Orderbook data, balances, session info
- * - Bottom (320x240): UP/DOWN touch buttons with visual feedback
+ * ui.c — Sui-inspired DeepDS UI rendered with Citro2D
  */
 
 #include "ui.h"
@@ -11,250 +7,249 @@
 #include <string.h>
 #include <3ds.h>
 
-static C2D_TextBuf  s_text_buf;
-static C2D_Font     s_font = NULL;  /* NULL = use system font */
-
-/* Frame counter for animations */
+static C2D_TextBuf s_text_buf;
 static u32 s_frame = 0;
 
 void ui_init(void) {
-    s_text_buf = C2D_TextBufNew(4096);
+    s_text_buf = C2D_TextBufNew(16384);
 }
 
-/* ---- Helper: draw filled rectangle ---- */
+void ui_exit(void) {
+    if (s_text_buf) {
+        C2D_TextBufDelete(s_text_buf);
+        s_text_buf = NULL;
+    }
+}
+
+void ui_begin_frame(void) {
+    C2D_TextBufClear(s_text_buf);
+}
+
 static void draw_rect(float x, float y, float w, float h, u32 color) {
     C2D_DrawRectSolid(x, y, 0.5f, w, h, color);
 }
 
-/* ---- Helper: draw bordered rectangle ---- */
-static void draw_border_rect(float x, float y, float w, float h,
-                              u32 fill, u32 border) {
-    draw_rect(x, y, w, h, fill);
-    /* Top */
-    draw_rect(x, y, w, 1, border);
-    /* Bottom */
-    draw_rect(x, y + h - 1, w, 1, border);
-    /* Left */
-    draw_rect(x, y, 1, h, border);
-    /* Right */
-    draw_rect(x + w - 1, y, 1, h, border);
+/* Low-resolution rounded card using stepped corners. */
+static void draw_card(float x, float y, float w, float h, u32 fill, u32 border) {
+    draw_rect(x + 4, y, w - 8, h, fill);
+    draw_rect(x, y + 4, w, h - 8, fill);
+    draw_rect(x + 4, y, w - 8, 1, border);
+    draw_rect(x + 4, y + h - 1, w - 8, 1, border);
+    draw_rect(x, y + 4, 1, h - 8, border);
+    draw_rect(x + w - 1, y + 4, 1, h - 8, border);
+    draw_rect(x + 2, y + 2, 2, 1, border);
+    draw_rect(x + w - 4, y + 2, 2, 1, border);
+    draw_rect(x + 2, y + h - 3, 2, 1, border);
+    draw_rect(x + w - 4, y + h - 3, 2, 1, border);
 }
 
-/* ---- Helper: draw text ---- */
-static void draw_text(const char* str, float x, float y, float sz, u32 color) {
+static void draw_pill(float x, float y, float w, float h, u32 fill) {
+    draw_rect(x + h / 2, y, w - h, h, fill);
+    C2D_DrawCircleSolid(x + h / 2, y + h / 2, 0.5f, h / 2, fill);
+    C2D_DrawCircleSolid(x + w - h / 2, y + h / 2, 0.5f, h / 2, fill);
+}
+
+static void draw_text(const char* str, float x, float y, float size, u32 color) {
     C2D_Text text;
-    C2D_TextBufClear(s_text_buf);
     C2D_TextParse(&text, s_text_buf, str);
     C2D_TextOptimize(&text);
-    C2D_DrawText(&text, C2D_WithColor | C2D_AtBaseline, x, y, 0.5f, sz, sz, color);
+    C2D_DrawText(
+        &text,
+        C2D_WithColor | C2D_AtBaseline,
+        x,
+        y,
+        0.5f,
+        size,
+        size,
+        color
+    );
 }
 
-/* ============================================================
-   TOP SCREEN (400 x 240)
-   ============================================================ */
+static void draw_brand(float width, const char* state_name) {
+    draw_card(10, 8, 34, 22, COL_INK, COL_INK);
+    draw_text("DS", 19, 24, 0.42f, COL_WHITE);
+    draw_text("DeepDS", 51, 24, 0.52f, COL_INK);
+
+    float pill_w = 64;
+    draw_pill(width - pill_w - 10, 9, pill_w, 20, COL_BLUE_SOFT);
+    draw_text(state_name, width - pill_w - 2, 23, 0.34f, COL_INK);
+}
+
+static void draw_empty_top(const char* state_name) {
+    draw_text("Pair your console", 20, 76, 0.82f, COL_INK);
+    draw_text("Press A to enter the proxy URL", 20, 105, 0.45f, COL_MUTED);
+    draw_text("and full session UUID.", 20, 124, 0.45f, COL_MUTED);
+
+    draw_card(20, 151, 360, 56, COL_BLUE_SOFT, COL_BLUE_SOFT);
+    draw_text("A", 38, 187, 0.80f, COL_BLUE);
+    draw_text("Start manual pairing", 72, 180, 0.55f, COL_INK);
+    draw_text("QR camera support can be added later", 72, 198, 0.34f, COL_MUTED);
+
+    if (strcmp(state_name, "ERROR") == 0) {
+        draw_text("Connection failed", 20, 76, 0.82f, COL_CORAL);
+        draw_text("Press A to try pairing again.", 20, 105, 0.45f, COL_MUTED);
+    }
+}
 
 void ui_draw_top(
     const MarketDisplay* market,
     const char* session_id,
     const char* state_name
 ) {
-    char buf[128];
+    char buf[96];
     s_frame++;
 
-    /* Background */
-    draw_rect(0, 0, SCREEN_TOP_W, SCREEN_H, COL_BLACK);
+    draw_rect(0, 0, SCREEN_TOP_W, SCREEN_H, COL_BG);
+    draw_brand(SCREEN_TOP_W, state_name);
 
-    /* Subtle grid lines */
-    for (int x = 0; x < SCREEN_TOP_W; x += 40) {
-        draw_rect(x, 0, 1, SCREEN_H, C2D_Color32(0, 30, 8, 255));
-    }
-    for (int y = 0; y < SCREEN_H; y += 30) {
-        draw_rect(0, y, SCREEN_TOP_W, 1, C2D_Color32(0, 30, 8, 255));
+    if (!market || !market->data_valid) {
+        draw_empty_top(state_name);
+        return;
     }
 
-    /* ── Title bar ── */
-    draw_rect(0, 0, SCREEN_TOP_W, 20, C2D_Color32(0, 40, 12, 255));
-    draw_text("DEEPDS v0.1 // SUI DEEPBOOK V3", 8, 14, 0.45f, COL_GREEN);
+    draw_text("BTC / 15 MIN", 16, 54, 0.38f, COL_BLUE);
+    snprintf(buf, sizeof(buf), "$%.2f", market->spot);
+    draw_text(buf, 16, 91, 0.92f, COL_INK);
 
-    /* Blinking status dot */
-    u32 dot_col = (s_frame % 60 < 30) ? COL_GREEN : C2D_Color32(0, 80, 20, 255);
-    draw_rect(380, 6, 8, 8, dot_col);
+    draw_pill(298, 44, 86, 25, COL_GREEN_SOFT);
+    draw_rect(308, 54, 6, 6, COL_GREEN);
+    draw_text("LIVE MARKET", 320, 61, 0.30f, COL_GREEN);
 
-    /* State indicator */
-    snprintf(buf, sizeof(buf), "[%s]", state_name);
-    draw_text(buf, 300, 14, 0.4f, COL_GREEN_DIM);
-
-    /* ── Session info ── */
-    draw_text("SESSION:", 8, 35, 0.4f, COL_GREEN_DIM);
-    if (session_id && strlen(session_id) > 0) {
-        /* Show first 8 chars of session ID */
-        char short_sid[16];
-        strncpy(short_sid, session_id, 8);
-        short_sid[8] = '\0';
-        snprintf(buf, sizeof(buf), "%s...", short_sid);
-        draw_text(buf, 80, 35, 0.4f, COL_GREEN);
-    } else {
-        draw_text("NOT CONNECTED", 80, 35, 0.4f, COL_YELLOW);
+    /* Simple Sui-blue price tape */
+    static const int bars[18] = {
+        12, 18, 15, 24, 21, 29, 26, 35, 31,
+        41, 37, 48, 43, 55, 49, 61, 56, 68
+    };
+    draw_card(14, 105, 250, 104, COL_SURFACE, COL_LINE);
+    draw_text("PRICE TAPE", 26, 125, 0.32f, COL_MUTED);
+    for (int i = 0; i < 18; i++) {
+        int h = bars[(i + (s_frame / 45)) % 18];
+        draw_rect(27 + i * 12, 194 - h, 8, h, COL_BLUE);
     }
+    draw_rect(26, 194, 220, 1, COL_LINE);
 
-    /* ── Market data panel ── */
-    draw_border_rect(8, 45, 190, 90, C2D_Color32(0, 20, 6, 200), COL_GREEN_DARK);
-    draw_text("BTC PREDICT", 14, 58, 0.45f, COL_BLUE);
+    draw_card(273, 105, 113, 48, COL_SURFACE, COL_LINE);
+    draw_text("STRIKE", 285, 124, 0.30f, COL_MUTED);
+    snprintf(buf, sizeof(buf), "$%.0f", market->strike);
+    draw_text(buf, 285, 145, 0.53f, COL_INK);
 
-    if (market && market->data_valid) {
-        snprintf(buf, sizeof(buf), "SPOT $%.2f", market->spot);
-        draw_text(buf, 14, 75, 0.45f, COL_GREEN);
+    draw_card(273, 161, 113, 48, COL_SURFACE, COL_LINE);
+    draw_text("SESSION FUNDS", 285, 180, 0.27f, COL_MUTED);
+    snprintf(buf, sizeof(buf), "%s dUSDC", market->dusdc_balance);
+    draw_text(buf, 285, 201, 0.43f, COL_INK);
 
-        snprintf(buf, sizeof(buf), "K    $%.0f", market->strike);
-        draw_text(buf, 14, 92, 0.45f, COL_RED);
+    draw_text("UP", 16, 229, 0.31f, COL_GREEN);
+    snprintf(buf, sizeof(buf), "%.1fc", market->up_price * 100.0f);
+    draw_text(buf, 39, 229, 0.38f, COL_INK);
+    draw_text("DOWN", 91, 229, 0.31f, COL_CORAL);
+    snprintf(buf, sizeof(buf), "%.1fc", market->down_price * 100.0f);
+    draw_text(buf, 130, 229, 0.38f, COL_INK);
 
-        snprintf(buf, sizeof(buf), "UP   %.1fc", market->up_price * 100.0f);
-        draw_text(buf, 14, 109, 0.4f, COL_YELLOW);
-
-        snprintf(buf, sizeof(buf), "DOWN %.1fc", market->down_price * 100.0f);
-        draw_text(buf, 14, 124, 0.4f, COL_GREEN_DIM);
-    } else {
-        draw_text("LOADING...", 14, 90, 0.45f, COL_GREEN_DIM);
-        /* Spinning indicator */
-        const char* spin[] = {"|", "/", "-", "\\"};
-        snprintf(buf, sizeof(buf), "%s", spin[(s_frame / 10) % 4]);
-        draw_text(buf, 100, 90, 0.5f, COL_GREEN);
+    if (session_id && session_id[0]) {
+        snprintf(buf, sizeof(buf), "SESSION %.8s", session_id);
+        draw_text(buf, 292, 229, 0.27f, COL_MUTED);
     }
-
-    /* ── Balance panel ── */
-    draw_border_rect(205, 45, 185, 90, C2D_Color32(0, 20, 6, 200), COL_GREEN_DARK);
-    draw_text("WALLET BALANCE", 210, 58, 0.38f, COL_BLUE);
-
-    if (market && market->data_valid) {
-        snprintf(buf, sizeof(buf), "SUI   %s", market->sui_balance);
-        draw_text(buf, 210, 75, 0.43f, COL_GREEN);
-
-        snprintf(buf, sizeof(buf), "dUSDC %s", market->dusdc_balance);
-        draw_text(buf, 210, 92, 0.43f, COL_GREEN);
-    } else {
-        draw_text("---", 210, 80, 0.45f, COL_GREEN_DIM);
-    }
-
-    /* ── Simple ASCII price chart ── */
-    draw_border_rect(8, 143, 384, 72, C2D_Color32(0, 15, 5, 200), COL_GREEN_DARK);
-    draw_text("PRICE HISTORY", 14, 155, 0.38f, COL_GREEN_DIM);
-
-    /* Draw a simple "chart" using random-looking bars for demo */
-    if (market && market->data_valid) {
-        float base_price = market->spot;
-        /* Static jitter for visual effect */
-        static float chart_vals[30] = {0};
-        static int chart_init = 0;
-        if (!chart_init) {
-            chart_init = 1;
-            for (int i = 0; i < 30; i++) {
-                chart_vals[i] = base_price + ((i % 7) - 3) * 0.01f;
-            }
-        }
-        chart_vals[s_frame % 30] = base_price;
-
-        for (int i = 0; i < 29; i++) {
-            float v1 = chart_vals[i];
-            float v2 = chart_vals[(i + 1) % 30];
-            float norm1 = (v1 - (base_price - 0.05f)) / 0.1f;
-            float norm2 = (v2 - (base_price - 0.05f)) / 0.1f;
-            /* Clamp */
-            if (norm1 < 0) norm1 = 0; if (norm1 > 1) norm1 = 1;
-            if (norm2 < 0) norm2 = 0; if (norm2 > 1) norm2 = 1;
-            float y1 = 207 - norm1 * 55;
-            float y2 = 207 - norm2 * 55;
-            float x1 = 14 + i * 12;
-            /* Simple vertical bar */
-            draw_rect(x1, (y1 < y2 ? y1 : y2), 2, (y1 < y2 ? y2 - y1 : y1 - y2) + 1, COL_GREEN);
-        }
-    } else {
-        draw_text("AWAITING DATA...", 120, 175, 0.4f, COL_GREEN_DIM);
-    }
-
-    /* ── Bottom status bar ── */
-    draw_rect(0, 220, SCREEN_TOP_W, 20, C2D_Color32(0, 25, 8, 255));
-    draw_text("DEEPBOOK V3 // SUI OVERFLOW 2026 // DEEPDS", 8, 234, 0.35f, COL_GREEN_DARK);
 }
 
-/* ============================================================
-   BOTTOM SCREEN (320 x 240)
-   ============================================================ */
+static void draw_action_button(
+    float x,
+    float y,
+    float w,
+    float h,
+    int pressed,
+    int is_up
+) {
+    u32 soft = is_up ? COL_GREEN_SOFT : COL_CORAL_SOFT;
+    u32 strong = is_up ? COL_GREEN : COL_CORAL;
+    u32 fill = pressed ? strong : soft;
+    u32 text = pressed ? COL_WHITE : strong;
+
+    draw_card(x, y, w, h, fill, strong);
+    draw_text(is_up ? "BTC ABOVE" : "BTC BELOW", x + 14, y + 25, 0.32f, text);
+    draw_text(is_up ? "UP" : "DOWN", x + 14, y + 70, 0.90f, text);
+    draw_text("MAX 1 dUSDC", x + 14, y + 92, 0.31f, text);
+}
+
+static void draw_pairing_bottom(void) {
+    draw_text("Connect DeepDS", 18, 54, 0.72f, COL_INK);
+    draw_text("Press A, then enter:", 18, 82, 0.43f, COL_MUTED);
+
+    draw_card(18, 100, 284, 46, COL_SURFACE, COL_LINE);
+    draw_text("1", 30, 129, 0.53f, COL_BLUE);
+    draw_text("Proxy URL", 57, 128, 0.48f, COL_INK);
+
+    draw_card(18, 156, 284, 46, COL_SURFACE, COL_LINE);
+    draw_text("2", 30, 185, 0.53f, COL_BLUE);
+    draw_text("Full session UUID", 57, 184, 0.48f, COL_INK);
+
+    draw_text("START exits to Homebrew Launcher", 58, 229, 0.31f, COL_MUTED);
+}
 
 void ui_draw_bottom(
     const TradeResult* last_trade,
-    int buy_pressed,
-    int down_pressed
+    int up_pressed,
+    int down_pressed,
+    const char* state_name,
+    const char* message
 ) {
-    char buf[128];
+    char buf[96];
 
-    /* Background */
-    draw_rect(0, 0, SCREEN_BOT_W, SCREEN_H, COL_BLACK);
+    draw_rect(0, 0, SCREEN_BOT_W, SCREEN_H, COL_BG);
+    draw_brand(SCREEN_BOT_W, state_name);
 
-    /* Title */
-    draw_rect(0, 0, SCREEN_BOT_W, 18, C2D_Color32(0, 35, 10, 255));
-    draw_text("TRADING CONTROLS", 60, 13, 0.45f, COL_GREEN);
-
-    /* Quantity display */
-    draw_text("MAX PAYOUT: 1 dUSDC", 72, 45, 0.45f, COL_GREEN_DIM);
-
-    /* ── UP Button ── */
-    u32 buy_bg  = buy_pressed  ? C2D_Color32(0, 180, 60, 255)  : C2D_Color32(0, 60, 20, 220);
-    u32 buy_brd = buy_pressed  ? COL_GREEN   : C2D_Color32(0, 120, 40, 255);
-    draw_border_rect(BTN_BUY_X, BTN_BUY_Y, BTN_BUY_W, BTN_BUY_H, buy_bg, buy_brd);
-    draw_text("UP", BTN_BUY_X + 50, BTN_BUY_Y + 35, 0.7f, COL_GREEN);
-    draw_text("BTC >", BTN_BUY_X + 38, BTN_BUY_Y + 58, 0.45f, COL_GREEN_DIM);
-
-    /* Glow effect when pressed */
-    if (buy_pressed) {
-        draw_rect(BTN_BUY_X - 2, BTN_BUY_Y - 2, BTN_BUY_W + 4, 2, COL_GREEN);
-        draw_rect(BTN_BUY_X - 2, BTN_BUY_Y + BTN_BUY_H, BTN_BUY_W + 4, 2, COL_GREEN);
+    if (strcmp(state_name, "QR SCAN") == 0) {
+        draw_pairing_bottom();
+        return;
     }
 
-    /* ── DOWN Button ── */
-    u32 sell_bg  = down_pressed ? C2D_Color32(180, 30, 50, 220)  : C2D_Color32(60, 10, 18, 220);
-    u32 sell_brd = down_pressed ? COL_RED    : C2D_Color32(160, 40, 60, 255);
-    draw_border_rect(BTN_SELL_X, BTN_SELL_Y, BTN_SELL_W, BTN_SELL_H, sell_bg, sell_brd);
-    draw_text("DOWN", BTN_SELL_X + 34, BTN_SELL_Y + 35, 0.7f, COL_RED);
-    draw_text("BTC <", BTN_SELL_X + 38, BTN_SELL_Y + 58, 0.45f, C2D_Color32(200, 80, 100, 255));
-
-    if (down_pressed) {
-        draw_rect(BTN_SELL_X - 2, BTN_SELL_Y - 2, BTN_SELL_W + 4, 2, COL_RED);
-        draw_rect(BTN_SELL_X - 2, BTN_SELL_Y + BTN_SELL_H, BTN_SELL_W + 4, 2, COL_RED);
+    if (strcmp(state_name, "ERROR") == 0) {
+        draw_text("Could not connect", 18, 72, 0.72f, COL_CORAL);
+        draw_text(message && message[0] ? message : "Check proxy and Wi-Fi.", 18, 99, 0.36f, COL_MUTED);
+        draw_card(18, 130, 284, 58, COL_BLUE_SOFT, COL_BLUE);
+        draw_text("A", 34, 167, 0.76f, COL_BLUE);
+        draw_text("Try pairing again", 72, 162, 0.53f, COL_INK);
+        draw_text("START exits", 118, 224, 0.31f, COL_MUTED);
+        return;
     }
 
-    /* ── Utility buttons ── */
-    draw_border_rect(BTN_REFRESH_X, BTN_REFRESH_Y, BTN_REFRESH_W, BTN_REFRESH_H,
-                     C2D_Color32(0, 20, 30, 200), C2D_Color32(0, 100, 150, 255));
-    draw_text("REFRESH", BTN_REFRESH_X + 15, BTN_REFRESH_Y + 25, 0.4f, COL_BLUE);
+    draw_text("Choose the next move", 14, 54, 0.60f, COL_INK);
+    draw_action_button(BTN_BUY_X, BTN_BUY_Y, BTN_BUY_W, BTN_BUY_H, up_pressed, 1);
+    draw_action_button(BTN_SELL_X, BTN_SELL_Y, BTN_SELL_W, BTN_SELL_H, down_pressed, 0);
 
-    draw_border_rect(BTN_QUIT_X, BTN_QUIT_Y, BTN_QUIT_W, BTN_QUIT_H,
-                     C2D_Color32(30, 10, 10, 200), C2D_Color32(150, 40, 40, 255));
-    draw_text("QUIT", BTN_QUIT_X + 28, BTN_QUIT_Y + 25, 0.4f, C2D_Color32(200, 80, 80, 255));
+    draw_card(
+        BTN_REFRESH_X,
+        BTN_REFRESH_Y,
+        BTN_REFRESH_W,
+        BTN_REFRESH_H,
+        COL_SURFACE,
+        COL_LINE
+    );
+    draw_text("REFRESH", BTN_REFRESH_X + 39, BTN_REFRESH_Y + 25, 0.38f, COL_BLUE);
 
-    /* ── Trade result feedback ── */
+    draw_card(
+        BTN_QUIT_X,
+        BTN_QUIT_Y,
+        BTN_QUIT_W,
+        BTN_QUIT_H,
+        COL_SURFACE,
+        COL_LINE
+    );
+    draw_text("EXIT", BTN_QUIT_X + 54, BTN_QUIT_Y + 25, 0.38f, COL_MUTED);
+
     if (last_trade && last_trade->show) {
-        u32 result_bg = last_trade->success
-            ? C2D_Color32(0, 50, 15, 220)
-            : C2D_Color32(50, 10, 10, 220);
-        u32 result_col = last_trade->success ? COL_GREEN : COL_RED;
-
-        draw_border_rect(10, 220, 300, 18, result_bg, result_col);
-
+        u32 fill = last_trade->success ? COL_GREEN : COL_CORAL;
+        draw_pill(26, 224, 268, 14, fill);
         if (last_trade->success) {
-            snprintf(buf, sizeof(buf), "OK  TX: %s", last_trade->digest);
+            snprintf(buf, sizeof(buf), "FILLED  %.20s", last_trade->digest);
         } else {
-            snprintf(buf, sizeof(buf), "ERR %s", last_trade->digest);
+            snprintf(buf, sizeof(buf), "TRADE FAILED");
         }
-        draw_text(buf, 14, 233, 0.35f, result_col);
-    } else {
-        draw_text("TOUCH UP OR DOWN TO PREDICT", 30, 234, 0.38f, C2D_Color32(0, 60, 20, 255));
+        draw_text(buf, 54, 236, 0.27f, COL_WHITE);
     }
 }
 
-/* ---- Touch area detection ---- */
-
 static int point_in_rect(u16 px, u16 py, int rx, int ry, int rw, int rh) {
-    return (px >= rx && px < rx + rw && py >= ry && py < ry + rh);
+    return px >= rx && px < rx + rw && py >= ry && py < ry + rh;
 }
 
 int ui_touch_in_buy(u16 tx, u16 ty) {

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { PREDICT_ID } from '../sui.js';
 import type { MarketDataResponse } from '../types.js';
+import { DUMMY_MODE } from '../config.js';
 
 const router = Router();
 const PREDICT_SERVER =
@@ -22,6 +23,24 @@ interface OracleState {
 }
 
 export async function fetchActiveMarket(): Promise<MarketDataResponse> {
+  if (DUMMY_MODE) {
+    const now = Date.now();
+    const wave = Math.sin(now / 18_000) * 145;
+    const spot = 64_000 + wave;
+    const strike = Math.round(spot / 100) * 100;
+    const up = Math.max(0.2, Math.min(0.8, 0.5 + (spot - strike) / 500));
+    return {
+      spot: Number(spot.toFixed(2)),
+      strike,
+      up: Number(up.toFixed(4)),
+      down: Number((1 - up).toFixed(4)),
+      expiry: Math.ceil(now / 900_000) * 900_000,
+      oracle: 'mock_btc_15m',
+      status: 'active',
+      ts: now,
+    };
+  }
+
   const response = await fetch(`${PREDICT_SERVER}/predicts/${PREDICT_ID}/oracles`, {
     signal: AbortSignal.timeout(5000),
   });

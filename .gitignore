@@ -5,8 +5,10 @@ dist/
 out/
 *.3dsx
 *.elf
+*.smdh
 *.o
 *.d
+apps/3ds/build/
 .env
 .env.local
 .env*.local

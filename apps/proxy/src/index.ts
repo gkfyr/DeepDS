@@ -18,6 +18,7 @@ import sessionRouter from './routes/session.js';
 import marketRouter from './routes/market.js';
 import tradeRouter from './routes/trade.js';
 import balanceRouter from './routes/balance.js';
+import { DUMMY_MODE } from './config.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
@@ -42,7 +43,12 @@ app.use('/api/balance', balanceRouter);
 
 // Health check
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', ts: Date.now(), service: 'deepds-proxy' });
+  res.json({
+    status: 'ok',
+    ts: Date.now(),
+    service: 'deepds-proxy',
+    mode: DUMMY_MODE ? 'dummy' : 'live',
+  });
 });
 
 // Root info (helps 3DS verify connection after QR scan)
@@ -51,6 +57,7 @@ app.get('/', (_req, res) => {
     service: 'DeepDS Proxy',
     version: '0.1.0',
     network: process.env.SUI_NETWORK ?? 'testnet',
+    mode: DUMMY_MODE ? 'dummy' : 'live',
     endpoints: [
       'GET  /health',
       'POST /api/session',
@@ -73,6 +80,7 @@ app.listen(PORT, '0.0.0.0', () => {
   
   🎮 DeepDS Proxy v0.1.0
   🌐 Network: ${process.env.SUI_NETWORK ?? 'testnet'}
+  🧪 Mode: ${DUMMY_MODE ? 'DUMMY (no chain / no dUSDC)' : 'LIVE'}
   🚀 Listening on http://0.0.0.0:${PORT}
   📡 3DS endpoint: http://<YOUR_LAN_IP>:${PORT}
   `);

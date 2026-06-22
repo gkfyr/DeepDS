@@ -108,9 +108,9 @@ static void fetch_balance(void) {
 
     char tmp[32];
     if (json_value(buf, "sui", tmp, sizeof(tmp)))
-        strncpy(g_market.sui_balance, tmp, sizeof(g_market.sui_balance) - 1);
+        snprintf(g_market.sui_balance, sizeof(g_market.sui_balance), "%.15s", tmp);
     if (json_value(buf, "dusdc", tmp, sizeof(tmp)))
-        strncpy(g_market.dusdc_balance, tmp, sizeof(g_market.dusdc_balance) - 1);
+        snprintf(g_market.dusdc_balance, sizeof(g_market.dusdc_balance), "%.15s", tmp);
 }
 
 /* ---- Execute trade ---- */
@@ -190,10 +190,6 @@ int main(int argc, char* argv[]) {
     C3D_RenderTarget* top = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
     C3D_RenderTarget* bot = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
 
-    /* Console for QR scan state (uses bottom screen text) */
-    PrintConsole console_bot;
-    consoleInit(GFX_BOTTOM, &console_bot);
-
     /* Initialize modules */
     session_init();
     memset(&g_market, 0, sizeof(g_market));
@@ -207,7 +203,6 @@ int main(int argc, char* argv[]) {
     /* Initialize QR scanner */
     qr_scanner_init();
 
-    u64 timer_start = svcGetSystemTick();
     int buy_pressed_frame  = 0;
     int sell_pressed_frame = 0;
 
@@ -240,6 +235,7 @@ int main(int argc, char* argv[]) {
             }
 
             /* Draw QR scan screen */
+            ui_begin_frame();
             C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
             C2D_TargetClear(top, COL_BLACK);
             C2D_SceneBegin(top);
@@ -248,7 +244,7 @@ int main(int argc, char* argv[]) {
             /* Bottom: instructions */
             C2D_TargetClear(bot, COL_BLACK);
             C2D_SceneBegin(bot);
-            ui_draw_bottom(&g_trade_result, 0, 0);
+            ui_draw_bottom(&g_trade_result, 0, 0, "QR SCAN", "");
             C3D_FrameEnd(0);
 
         } else if (g_state == STATE_CONNECTING) {
@@ -261,7 +257,12 @@ int main(int argc, char* argv[]) {
                 fetch_balance();
                 g_state = STATE_TRADING;
             } else {
-                snprintf(g_error_msg, sizeof(g_error_msg), "PROXY UNREACHABLE: %s", g_session.url);
+                snprintf(
+                    g_error_msg,
+                    sizeof(g_error_msg),
+                    "PROXY UNREACHABLE: %.100s",
+                    g_session.url
+                );
                 g_state = STATE_ERROR;
             }
 
@@ -311,6 +312,7 @@ int main(int argc, char* argv[]) {
             }
 
             /* ---- Render frames ---- */
+            ui_begin_frame();
             C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
 
             C2D_TargetClear(top, COL_BLACK);
@@ -319,7 +321,13 @@ int main(int argc, char* argv[]) {
 
             C2D_TargetClear(bot, COL_BLACK);
             C2D_SceneBegin(bot);
-            ui_draw_bottom(&g_trade_result, buy_pressed_frame, sell_pressed_frame);
+            ui_draw_bottom(
+                &g_trade_result,
+                buy_pressed_frame,
+                sell_pressed_frame,
+                "TRADING",
+                ""
+            );
 
             C3D_FrameEnd(0);
 
@@ -331,6 +339,7 @@ int main(int argc, char* argv[]) {
                 memset(&g_market, 0, sizeof(g_market));
             }
 
+            ui_begin_frame();
             C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
 
             C2D_TargetClear(top, COL_BLACK);
@@ -339,8 +348,7 @@ int main(int argc, char* argv[]) {
 
             C2D_TargetClear(bot, COL_BLACK);
             C2D_SceneBegin(bot);
-            /* Draw error on bottom screen */
-            ui_draw_bottom(&g_trade_result, 0, 0);
+            ui_draw_bottom(&g_trade_result, 0, 0, "ERROR", g_error_msg);
 
             C3D_FrameEnd(0);
         }
@@ -349,6 +357,7 @@ int main(int argc, char* argv[]) {
     /* ---- Cleanup ---- */
     qr_scanner_exit();
     network_exit();
+    ui_exit();
     C2D_Fini();
     C3D_Fini();
     gfxExit();

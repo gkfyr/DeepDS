@@ -11,6 +11,7 @@ export interface SessionPayload {
   privkey: string;
   ephemeralAddress: string;
   userAddress: string;
+  allowance?: string;
 }
 
 export interface MarketData {

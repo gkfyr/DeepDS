@@ -1,144 +1,226 @@
 'use client';
 
-/**
- * Landing Page — DeepDS Home
- *
- * Shows the project pitch, architecture diagram, and CTA to connect wallet.
- * Judging criterion: Real-world application + UX polish
- */
-
 import Link from 'next/link';
-import { useCurrentAccount, ConnectButton } from '@mysten/dapp-kit';
+import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit';
+
+const DUMMY_MODE = process.env.NEXT_PUBLIC_DUMMY_MODE === 'true';
+
+function DeepDsDevice() {
+  return (
+    <div className="device-shell" aria-label="DeepDS dual-screen trading terminal preview">
+      <div className="mb-3 flex items-center justify-between px-2">
+        <div className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-ds-blue" />
+          <span className="h-2 w-2 rounded-full bg-ds-coral" />
+        </div>
+        <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-ds-muted">
+          DeepDS / {DUMMY_MODE ? 'dummy' : 'testnet'}
+        </span>
+      </div>
+
+      <div className="device-screen screen-grid aspect-[5/3] p-5 sm:p-7">
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-[#78bdf2]">
+              BTC · 15 min
+            </div>
+            <div className="mt-1 font-mono text-2xl font-medium text-white sm:text-3xl">
+              $64,141
+            </div>
+          </div>
+          <div className="rounded-full border border-[#2e5774] px-2.5 py-1 font-mono text-[9px] text-[#92d2ff]">
+            LIVE
+          </div>
+        </div>
+
+        <div className="mt-6 flex h-16 items-end gap-1">
+          {[30, 38, 34, 48, 43, 58, 52, 66, 61, 76, 69, 84, 78, 90].map(
+            (height, index) => (
+              <div
+                key={index}
+                className="flex-1 rounded-t-sm bg-ds-blue"
+                style={{ height: `${height}%`, opacity: 0.35 + index * 0.04 }}
+              />
+            ),
+          )}
+        </div>
+
+        <div className="mt-4 flex justify-between border-t border-[#24465f] pt-3 font-mono text-[9px] text-[#6d9cbd]">
+          <span>STRIKE $64,141</span>
+          <span>09:30 LEFT</span>
+        </div>
+      </div>
+
+      <div className="device-hinge" />
+
+      <div className="device-screen aspect-[4/2.45] p-5 sm:p-6">
+        <div className="grid h-full grid-cols-2 gap-3">
+          <div className="flex flex-col justify-between rounded-[14px] border border-[#235b4e] bg-[#0d302d] p-4">
+            <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-[#6ed4b2]">
+              BTC above strike
+            </span>
+            <div>
+              <div className="text-2xl font-extrabold tracking-[-0.04em] text-white">UP</div>
+              <div className="mt-1 font-mono text-xs text-[#79dabc]">50.0¢</div>
+            </div>
+          </div>
+          <div className="flex flex-col justify-between rounded-[14px] border border-[#713f49] bg-[#351b27] p-4">
+            <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-[#f0a1ad]">
+              BTC below strike
+            </span>
+            <div>
+              <div className="text-2xl font-extrabold tracking-[-0.04em] text-white">DOWN</div>
+              <div className="mt-1 font-mono text-xs text-[#ffadb8]">50.0¢</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between px-3">
+        <div className="grid h-12 w-12 place-items-center rounded-full bg-[#d5dfe6] shadow-inner">
+          <div className="relative h-7 w-7">
+            <span className="absolute left-2.5 top-0 h-7 w-2 rounded-sm bg-[#aebdc8]" />
+            <span className="absolute left-0 top-2.5 h-2 w-7 rounded-sm bg-[#aebdc8]" />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <span className="h-7 w-7 rounded-full bg-ds-blue shadow-[inset_0_-3px_0_rgba(0,0,0,.12)]" />
+          <span className="mt-5 h-7 w-7 rounded-full bg-ds-coral shadow-[inset_0_-3px_0_rgba(0,0,0,.12)]" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function HomePage() {
   const account = useCurrentAccount();
 
   return (
-    <main className="relative z-10 min-h-screen flex flex-col">
-      {/* ── Header ── */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-ds-border">
-        <div className="flex items-center gap-3">
-          <span className="text-2xl">🎮</span>
-          <h1 className="ds-title text-lg">DeepDS</h1>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="ds-tag hidden sm:inline">testnet</span>
-          <ConnectButton />
-        </div>
-      </header>
-
-      {/* ── Hero ── */}
-      <section className="flex-1 flex flex-col items-center justify-center px-4 py-16 text-center">
-        {/* ASCII 3DS art */}
-        <pre className="text-ds-green text-xs leading-tight mb-8 opacity-60 hidden md:block">
-{`  ╔══════════════════════════════╗
-  ║  ██████╗ ███████╗ ██████╗  ║  TOP SCREEN
-  ║  ██╔══██╗██╔════╝ ██╔══██╗ ║  [ DEEPBOOK ORDERBOOK ]
-  ║  ██║  ██║███████╗ ██║  ██║ ║
-  ║  ██║  ██║╚════██║ ██║  ██║ ║  BID: 3.2100 SUI
-  ║  ██████╔╝███████║ ██████╔╝ ║  ASK: 3.2300 SUI
-  ║  ╚═════╝ ╚══════╝ ╚═════╝  ║
-  ╠══════════════════════════════╣
-  ║  [ UP ]         [ DOWN ]   ║  BOTTOM TOUCH SCREEN
-  ║  BTC > strike   BTC < strike║
-  ║  [ REFRESH ]  [ SETTINGS ] ║
-  ╚══════════════════════════════╝`}
-        </pre>
-
-        <div className="mb-6 animate-fade-in">
-          <h2 className="ds-title text-4xl md:text-6xl mb-4 ds-cursor">
-            DEEP<span className="text-ds-blue">DS</span>
-          </h2>
-          <p className="text-green-600 text-sm md:text-base max-w-xl mx-auto leading-relaxed">
-            Trade <span className="text-ds-green">DeepBook Predict</span> using a{' '}
-            <span className="text-ds-blue">Nintendo 3DS</span> as your trading terminal.
-            <br />
-            Because why use a phone when you have a dual-screen wonder?
-          </p>
-        </div>
-
-        {/* Architecture flow */}
-        <div className="flex flex-wrap items-center justify-center gap-2 mb-10 text-xs text-green-700">
-          {[
-            '🖥️ Browser Wallet',
-            '→',
-            '📱 QR Code',
-            '→',
-            '🎮 3DS Camera',
-            '→',
-            '📡 HTTP',
-            '→',
-            '⚡ Proxy',
-            '→',
-            '🌐 DeepBook Predict',
-          ].map((item, i) => (
-            <span key={i} className={item === '→' ? 'text-green-900' : 'ds-tag'}>
-              {item}
+    <main className="min-h-screen overflow-hidden">
+      <div className="site-shell">
+        <header className="site-header">
+          <Link href="/" className="brand" aria-label="DeepDS home">
+            <span className="brand-mark">DS</span>
+            <span className="text-xl">DeepDS</span>
+          </Link>
+          <div className="flex items-center gap-3">
+            <span className="hidden rounded-full bg-ds-blue-soft px-3 py-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-ds-ink sm:inline">
+              {DUMMY_MODE ? 'Local dummy' : 'Sui testnet'}
             </span>
-          ))}
-        </div>
-
-        {/* CTA */}
-        {account ? (
-          <div className="flex flex-col items-center gap-4 animate-slide-up">
-            <div className="ds-panel px-4 py-2 text-sm">
-              <span className="ds-status-dot" />
-              <span className="text-green-600">Connected: </span>
-              <span className="text-ds-green font-mono text-xs">
-                {account.address.slice(0, 10)}...{account.address.slice(-8)}
-              </span>
-            </div>
-            <Link href="/session">
-              <button className="ds-button-primary text-lg px-10 py-4">
-                🎮 Create Trading Session
-              </button>
-            </Link>
+            {!DUMMY_MODE && (
+              <div className="hidden sm:block">
+                <ConnectButton />
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="flex flex-col items-center gap-3 animate-slide-up">
-            <p className="text-green-700 text-xs mb-2">
-              Connect your Sui wallet to begin
+        </header>
+
+        <section className="grid min-h-[calc(100vh-80px)] items-center gap-14 pb-20 pt-10 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20 lg:py-16">
+          <div className="hero-copy max-w-xl">
+            <p className="eyebrow mb-6">DeepBook Predict, in your hands</p>
+            <h1 className="display-title">
+              Trade the
+              <br />
+              next move.
+            </h1>
+            <p className="body-copy mt-8 max-w-lg">
+              {DUMMY_MODE
+                ? 'Turn a Nintendo 3DS into a pocket-sized BTC prediction terminal. Run the full console UI locally with virtual funds.'
+                : 'Turn a Nintendo 3DS into a pocket-sized BTC prediction terminal. One wallet approval, then tap UP or DOWN on real Sui markets.'}
             </p>
-            <ConnectButton />
-          </div>
-        )}
 
-        {/* Feature grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-16 max-w-3xl w-full text-left">
-          {[
-            {
-              icon: '🔑',
-              title: 'Allowance-Limited Session',
-              desc: 'Your wallet funds a temporary key with only the gas and dUSDC allowance you choose. No signing on every prediction.',
-            },
-            {
-              icon: '📺',
-              title: 'Dual Screen Terminal',
-              desc: 'Top screen shows the live BTC oracle and strike. Bottom touch screen has UP/DOWN buttons.',
-            },
-            {
-              icon: '⚡',
-              title: 'DeepBook Predict',
-              desc: 'Real on-chain binary positions priced by the protocol volatility surface on Sui testnet.',
-            },
-          ].map((f) => (
-            <div key={f.title} className="ds-panel p-4">
-              <div className="text-2xl mb-2">{f.icon}</div>
-              <div className="ds-title text-xs mb-2">{f.title}</div>
-              <p className="text-green-700 text-xs leading-relaxed">{f.desc}</p>
+            <div className="mt-9 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+              {account || DUMMY_MODE ? (
+                <Link href="/session" className="primary-button">
+                  {DUMMY_MODE ? 'Start dummy session' : 'Create a 3DS session'}
+                  <span aria-hidden="true">→</span>
+                </Link>
+              ) : (
+                <div className="flex flex-col items-start gap-2">
+                  <ConnectButton />
+                  <span className="pl-2 text-xs text-ds-muted">
+                    Connect a testnet wallet to begin
+                  </span>
+                </div>
+              )}
+              <a href="#how-it-works" className="secondary-button">
+                See how it works
+              </a>
             </div>
-          ))}
+
+            {(account || DUMMY_MODE) && (
+              <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-ds-line bg-white px-3 py-2 font-mono text-[10px] text-ds-muted">
+                <span className="status-dot" />
+                {DUMMY_MODE
+                  ? 'No wallet · no chain · local mock'
+                  : `${account!.address.slice(0, 8)}…${account!.address.slice(-6)}`}
+              </div>
+            )}
+          </div>
+
+          <div className="relative py-4">
+            <div className="absolute -left-8 top-10 h-24 w-24 rounded-full bg-ds-blue-soft blur-2xl" />
+            <div className="absolute -right-16 bottom-10 h-40 w-40 rounded-full bg-[#ffdede] blur-3xl" />
+            <DeepDsDevice />
+          </div>
+        </section>
+      </div>
+
+      <section id="how-it-works" className="border-y border-ds-line bg-white py-24">
+        <div className="site-shell">
+          <div className="grid gap-12 lg:grid-cols-[0.75fr_1.25fr]">
+            <div>
+              <p className="eyebrow mb-4">
+                {DUMMY_MODE ? 'No tokens. Real hardware.' : 'One approval. Many taps.'}
+              </p>
+              <h2 className="section-title">Simple enough for a handheld.</h2>
+              <p className="mt-5 max-w-md leading-7 text-ds-muted">
+                {DUMMY_MODE
+                  ? 'The local proxy simulates the market, balance, and fills. Your 3DS runs the same networking, controls, and rendering as live mode.'
+                  : 'The browser handles wallet security. The proxy handles Sui. Your 3DS only needs to show the market and send a choice.'}
+              </p>
+            </div>
+
+            <div className="grid gap-px overflow-hidden rounded-[28px] border border-ds-line bg-ds-line sm:grid-cols-3">
+              {[
+                {
+                  label: DUMMY_MODE ? 'Allocate' : 'Approve',
+                  title: DUMMY_MODE ? 'Set virtual funds' : 'Set a small allowance',
+                  copy: DUMMY_MODE
+                    ? 'Choose the pretend dUSDC balance used by the local session.'
+                    : 'Choose exactly how much dUSDC the temporary session can use.',
+                },
+                {
+                  label: 'Pair',
+                  title: 'Open it on your 3DS',
+                  copy: 'Scan the session QR or enter the local proxy address manually.',
+                },
+                {
+                  label: 'Predict',
+                  title: 'Tap UP or DOWN',
+                  copy: DUMMY_MODE
+                    ? 'The proxy returns a mock digest and subtracts the simulated cost.'
+                    : 'The proxy signs the Predict transaction and returns the digest.',
+                },
+              ].map((item) => (
+                <article key={item.label} className="bg-white p-7">
+                  <div className="mb-10 font-mono text-[10px] uppercase tracking-[0.14em] text-ds-blue">
+                    {item.label}
+                  </div>
+                  <h3 className="text-lg font-extrabold tracking-[-0.03em] text-ds-ink">
+                    {item.title}
+                  </h3>
+                  <p className="mt-3 text-sm leading-6 text-ds-muted">{item.copy}</p>
+                </article>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* ── Footer ── */}
-      <footer className="border-t border-ds-border px-6 py-3 flex items-center justify-between text-xs text-green-900">
-        <span>Sui Overflow 2026 · DeepBook Track</span>
-        <span>
-          Powered by{' '}
-          <span className="text-ds-green">DeepBook V3</span> ×{' '}
-          <span className="text-ds-blue">devkitARM</span>
-        </span>
+      <footer className="site-shell flex flex-col gap-3 py-8 text-xs text-ds-muted sm:flex-row sm:items-center sm:justify-between">
+        <span>DeepDS · Sui Overflow 2026</span>
+        <span className="font-mono">DeepBook Predict × Nintendo 3DS</span>
       </footer>
     </main>
   );

@@ -1,102 +1,92 @@
 /**
- * ui.h — DeepDS UI rendering for Nintendo 3DS
+ * ui.h — DeepDS dual-screen UI
  *
- * Top screen (400x240): Orderbook data, session info, price chart
- * Bottom screen (320x240): UP/DOWN touch buttons, status
- *
- * Uses citro2d for 2D rendering on top of citro3d.
+ * A compact Sui-inspired interface:
+ * - Top screen: live BTC market, strike, marks, balance
+ * - Bottom screen: large UP/DOWN touch targets and pairing/error guidance
  */
 
 #pragma once
 
 #include <citro2d.h>
 
-/* Screen dimensions */
-#define SCREEN_TOP_W    400
-#define SCREEN_BOT_W    320
-#define SCREEN_H        240
+#define SCREEN_TOP_W 400
+#define SCREEN_BOT_W 320
+#define SCREEN_H     240
 
-/* Color palette (phosphor green terminal) */
-#define COL_BLACK       C2D_Color32(10,  10,  15,  255)  /* #0a0a0f */
-#define COL_GREEN       C2D_Color32(0,   255, 65,  255)  /* #00ff41 */
-#define COL_GREEN_DIM   C2D_Color32(0,   160, 40,  255)  /* dim green */
-#define COL_GREEN_DARK  C2D_Color32(0,   50,  15,  200)  /* panel bg */
-#define COL_BLUE        C2D_Color32(0,   255, 255, 255)  /* cyan */
-#define COL_RED         C2D_Color32(255, 45,  85,  255)  /* #ff2d55 */
-#define COL_YELLOW      C2D_Color32(255, 214, 10,  255)  /* #ffd60a */
-#define COL_WHITE       C2D_Color32(220, 220, 220, 255)
-#define COL_GRAY        C2D_Color32(50,  50,  60,  255)
-#define COL_TRANSPARENT C2D_Color32(0,   0,   0,   0)
+/* Sui-inspired palette */
+#define COL_BG          C2D_Color32(244, 250, 255, 255)
+#define COL_SURFACE     C2D_Color32(255, 255, 255, 255)
+#define COL_INK         C2D_Color32(16, 42, 67, 255)
+#define COL_MUTED       C2D_Color32(98, 125, 152, 255)
+#define COL_LINE        C2D_Color32(216, 231, 241, 255)
+#define COL_BLUE        C2D_Color32(77, 162, 255, 255)
+#define COL_BLUE_SOFT   C2D_Color32(223, 241, 255, 255)
+#define COL_NAVY        C2D_Color32(7, 27, 45, 255)
+#define COL_GREEN       C2D_Color32(40, 184, 136, 255)
+#define COL_GREEN_SOFT  C2D_Color32(232, 248, 243, 255)
+#define COL_CORAL       C2D_Color32(255, 107, 107, 255)
+#define COL_CORAL_SOFT  C2D_Color32(255, 239, 239, 255)
+#define COL_WHITE       C2D_Color32(255, 255, 255, 255)
+#define COL_BLACK       COL_BG
 
-/* Touch button areas on bottom screen */
-#define BTN_BUY_X    10
-#define BTN_BUY_Y    60
-#define BTN_BUY_W    140
-#define BTN_BUY_H    80
+/* Large, thumb-friendly controls */
+#define BTN_BUY_X       12
+#define BTN_BUY_Y       66
+#define BTN_BUY_W       142
+#define BTN_BUY_H       104
 
-#define BTN_SELL_X   170
-#define BTN_SELL_Y   60
-#define BTN_SELL_W   140
-#define BTN_SELL_H   80
+#define BTN_SELL_X      166
+#define BTN_SELL_Y      66
+#define BTN_SELL_W      142
+#define BTN_SELL_H      104
 
-#define BTN_REFRESH_X  40
-#define BTN_REFRESH_Y  170
-#define BTN_REFRESH_W  100
-#define BTN_REFRESH_H  40
+#define BTN_REFRESH_X   12
+#define BTN_REFRESH_Y   184
+#define BTN_REFRESH_W   142
+#define BTN_REFRESH_H   38
 
-#define BTN_QUIT_X   180
-#define BTN_QUIT_Y   170
-#define BTN_QUIT_W   100
-#define BTN_QUIT_H   40
+#define BTN_QUIT_X      166
+#define BTN_QUIT_Y      184
+#define BTN_QUIT_W      142
+#define BTN_QUIT_H      38
 
-/* Market data for display */
 typedef struct {
     float spot;
     float strike;
     float up_price;
     float down_price;
     long long expiry;
-    char  sui_balance[16];
-    char  dusdc_balance[16];
-    int   data_valid;
+    char sui_balance[16];
+    char dusdc_balance[16];
+    int data_valid;
 } MarketDisplay;
 
-/* Trade result for feedback */
 typedef struct {
-    int   success;
-    char  digest[24];  /* shortened tx digest */
-    int   show;        /* 1 = show result, 0 = hide */
-    int   countdown;   /* frames to show result */
+    int success;
+    char digest[24];
+    int show;
+    int countdown;
 } TradeResult;
 
-/**
- * Initialize UI (must call after gfxInitDefault + C2D_Init).
- */
 void ui_init(void);
+void ui_exit(void);
+void ui_begin_frame(void);
 
-/**
- * Draw the top screen.
- * Shows: title, session info, market data, price trend
- */
 void ui_draw_top(
     const MarketDisplay* market,
     const char* session_id,
     const char* state_name
 );
 
-/**
- * Draw the bottom touch screen.
- * Shows: UP/DOWN buttons, quantity selector, status
- */
 void ui_draw_bottom(
     const TradeResult* last_trade,
-    int buy_pressed,
-    int sell_pressed
+    int up_pressed,
+    int down_pressed,
+    const char* state_name,
+    const char* message
 );
 
-/**
- * Check if a touch point is within a button area.
- */
 int ui_touch_in_buy(u16 tx, u16 ty);
 int ui_touch_in_down(u16 tx, u16 ty);
 int ui_touch_in_refresh(u16 tx, u16 ty);

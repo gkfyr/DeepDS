@@ -17,7 +17,7 @@ BUILD       := build
 SOURCES     := source
 DATA        := data
 INCLUDES    := include
-ROMFS       := romfs
+ROMFS       :=
 
 #---------------------------------------------------------------------------------
 # Options for code generation
@@ -28,7 +28,7 @@ CFLAGS  := -g -Wall -O2 -mword-relocations \
            -ffunction-sections \
            $(ARCH)
 
-CFLAGS  += $(INCLUDE) -DARM11 -D_3DS
+CFLAGS  += $(INCLUDE) -D__3DS__
 
 CXXFLAGS := $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
 
@@ -48,6 +48,7 @@ ifneq ($(BUILD),$(notdir $(CURDIR)))
 
 export OUTPUT  := $(CURDIR)/$(TARGET)
 export TOPDIR  := $(CURDIR)
+export _3DSXDEPS := $(if $(NO_SMDH),,$(OUTPUT).smdh)
 export VPATH   := $(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) \
                   $(foreach dir,$(DATA),$(CURDIR)/$(dir))
 
@@ -109,7 +110,7 @@ else
 
 DEPENDS := $(OFILES:.o=.d)
 
-$(OUTPUT).3dsx: $(OUTPUT).elf
+$(OUTPUT).3dsx: $(OUTPUT).elf $(_3DSXDEPS)
 
 $(OUTPUT).elf: $(OFILES)
 

@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <malloc.h>
 #include <3ds.h>
 
 /* SOC buffer — required for socket operations on 3DS */
@@ -110,7 +111,7 @@ int http_post(const char* url, const char* body, char* buf, size_t buf_sz) {
     if (body && strlen(body) > 0) {
         rc = httpcAddPostDataRaw(
             &ctx,
-            (const u8*)body,
+            (const u32*)body,
             (u32)strlen(body)
         );
         if (R_FAILED(rc)) {
