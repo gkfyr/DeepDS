@@ -2,14 +2,10 @@
 
 DeepDS turns a Nintendo 3DS into a physical BTC prediction terminal for the Sui Overflow 2026 DeepBook Predict track.
 
-![image](images/IMG_2253.jpg)
+[![Watch on YouTube](https://img.youtube.com/vi/Xie-nVBO11o/hqdefault.jpg)](https://youtube.com/Xie-nVBO11o)
+[![Watch on YouTube](https://img.youtube.com/vi/9Y_k8kW2xns/hqdefault.jpg)](https://youtube.com/shorts/9Y_k8kW2xns)
 
 The browser creates an allowance-limited ephemeral wallet, the proxy creates a `PredictManager` owned by that wallet, and the 3DS submits simple `UP` or `DOWN` commands over local HTTP. Private keys and Sui transaction building never run on the 3DS.
-
-## Video links
-
-- https://youtube.com/shorts/9Y_k8kW2xns?feature=share
-- https://youtu.be/Xie-nVBO11o
 
 ## Architecture
 
