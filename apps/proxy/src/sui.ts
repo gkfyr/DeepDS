@@ -18,9 +18,19 @@ export const suiClient = new SuiClient({ url: getFullnodeUrl(NETWORK) });
 
 const OBJECT_READY_ATTEMPTS = 12;
 const OBJECT_READY_DELAY_MS = 750;
+const DEPOSIT_SUBMIT_ATTEMPTS = 6;
+const DEPOSIT_RETRY_DELAY_MS = 1500;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isObjectVisibilityRace(error: unknown, objectId: string): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes('"code":"notExists"') &&
+    message.toLowerCase().includes(objectId.toLowerCase())
+  );
 }
 
 async function waitForSharedObject(objectId: string): Promise<{
@@ -129,34 +139,54 @@ export async function createAndFundPredictManager(
     if (onManagerCreated) await onManagerCreated(managerId);
   }
 
-  const [managerRef, coins] = await Promise.all([
-    waitForSharedObject(managerId),
-    waitForDusdcCoins(address),
-  ]);
+  /*
+   * Testnet's public RPC hostname is load-balanced. Immediately after
+   * create_manager, one backend can return the new shared object while the
+   * backend receiving the deposit transaction still reports it as notExists.
+   * Rebuild and resubmit only that safe pre-execution validation failure.
+   */
+  for (let attempt = 1; attempt <= DEPOSIT_SUBMIT_ATTEMPTS; attempt++) {
+    const [managerRef, coins] = await Promise.all([
+      waitForSharedObject(managerId),
+      waitForDusdcCoins(address),
+    ]);
 
-  const depositTx = new Transaction();
-  depositTx.setSender(address);
-  const [primary, ...rest] = coins.map((coin) =>
-    depositTx.objectRef({
-      objectId: coin.coinObjectId,
-      version: coin.version,
-      digest: coin.digest,
-    }),
-  );
-  if (rest.length > 0) depositTx.mergeCoins(primary!, rest);
-  depositTx.moveCall({
-    target: `${PREDICT_PACKAGE_ID}::predict_manager::deposit`,
-    typeArguments: [DUSDC_TYPE],
-    arguments: [
-      depositTx.sharedObjectRef({
-        objectId: managerRef.objectId,
-        initialSharedVersion: managerRef.initialSharedVersion,
-        mutable: true,
+    const depositTx = new Transaction();
+    depositTx.setSender(address);
+    const [primary, ...rest] = coins.map((coin) =>
+      depositTx.objectRef({
+        objectId: coin.coinObjectId,
+        version: coin.version,
+        digest: coin.digest,
       }),
-      primary!,
-    ],
-  });
-  const deposited = await execute(depositTx, keypair);
+    );
+    if (rest.length > 0) depositTx.mergeCoins(primary!, rest);
+    depositTx.moveCall({
+      target: `${PREDICT_PACKAGE_ID}::predict_manager::deposit`,
+      typeArguments: [DUSDC_TYPE],
+      arguments: [
+        depositTx.sharedObjectRef({
+          objectId: managerRef.objectId,
+          initialSharedVersion: managerRef.initialSharedVersion,
+          mutable: true,
+        }),
+        primary!,
+      ],
+    });
 
-  return { managerId, digest: deposited.digest };
+    try {
+      const deposited = await execute(depositTx, keypair);
+      return { managerId, digest: deposited.digest };
+    } catch (error) {
+      if (
+        attempt === DEPOSIT_SUBMIT_ATTEMPTS ||
+        !isObjectVisibilityRace(error, managerId)
+      ) {
+        throw error;
+      }
+      await sleep(DEPOSIT_RETRY_DELAY_MS * attempt);
+    }
+  }
+
+  throw new Error('PredictManager deposit retry limit reached');
 }
