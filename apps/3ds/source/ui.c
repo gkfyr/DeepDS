@@ -11,7 +11,6 @@ static C2D_TextBuf s_text_buf;
 static C2D_SpriteSheet s_logo_sheet;
 static C2D_Image s_logo_image;
 static int s_logo_ready = 0;
-static u32 s_frame = 0;
 
 void ui_init(void) {
     s_text_buf = C2D_TextBufNew(16384);
@@ -195,7 +194,6 @@ void ui_draw_top(
     const char* state_name
 ) {
     char buf[96];
-    s_frame++;
 
     draw_rect(0, 0, SCREEN_TOP_W, SCREEN_H, COL_BG);
     draw_brand(SCREEN_TOP_W, state_name);
@@ -205,47 +203,67 @@ void ui_draw_top(
         return;
     }
 
-    draw_text("BTC / 15 MIN", 16, 54, 0.38f, COL_BLUE);
+    draw_text("BTC  /  LIVE ORACLE", 16, 53, 0.40f, COL_BLUE);
     snprintf(buf, sizeof(buf), "$%.2f", market->spot);
-    draw_text(buf, 16, 91, 0.92f, COL_INK);
+    draw_text(buf, 16, 88, 0.86f, COL_INK);
 
-    draw_pill(298, 44, 86, 25, COL_GREEN_SOFT);
-    draw_rect(308, 54, 6, 6, COL_GREEN);
-    draw_text("LIVE MARKET", 320, 61, 0.30f, COL_GREEN);
+    long long age_ms = (long long)osGetTime() - market->updated_at;
+    draw_pill(294, 43, 90, 26, age_ms < 15000 ? COL_GREEN_SOFT : COL_CORAL_SOFT);
+    draw_rect(305, 53, 7, 7, age_ms < 15000 ? COL_GREEN : COL_CORAL);
+    snprintf(buf, sizeof(buf), "%llds AGO", age_ms > 0 ? age_ms / 1000 : 0);
+    draw_text(buf, 320, 62, 0.38f, age_ms < 15000 ? COL_GREEN : COL_CORAL);
 
-    /* Simple Sui-blue price tape */
-    static const int bars[18] = {
-        12, 18, 15, 24, 21, 29, 26, 35, 31,
-        41, 37, 48, 43, 55, 49, 61, 56, 68
-    };
-    draw_card(14, 105, 250, 104, COL_SURFACE, COL_LINE);
-    draw_text("PRICE TAPE", 26, 125, 0.32f, COL_MUTED);
-    for (int i = 0; i < 18; i++) {
-        int h = bars[(i + (s_frame / 45)) % 18];
-        draw_rect(27 + i * 12, 194 - h, 8, h, COL_BLUE);
+    draw_card(14, 101, 250, 103, COL_SURFACE, COL_LINE);
+    draw_text("REAL PRICE HISTORY", 26, 123, 0.39f, COL_MUTED);
+    snprintf(buf, sizeof(buf), "FWD $%.0f", market->forward);
+    draw_text(buf, 174, 123, 0.34f, COL_MUTED);
+    if (market->history_count >= 2) {
+        float min_price = market->history[0];
+        float max_price = market->history[0];
+        for (int i = 1; i < market->history_count; i++) {
+            if (market->history[i] < min_price) min_price = market->history[i];
+            if (market->history[i] > max_price) max_price = market->history[i];
+        }
+        float range = max_price - min_price;
+        if (range < 1.0f) range = 1.0f;
+        for (int i = 1; i < market->history_count; i++) {
+            float x0 = 27 + (i - 1) * 218.0f / (market->history_count - 1);
+            float x1 = 27 + i * 218.0f / (market->history_count - 1);
+            float y0 = 187 - (market->history[i - 1] - min_price) * 51.0f / range;
+            float y1 = 187 - (market->history[i] - min_price) * 51.0f / range;
+            C2D_DrawLine(x0, y0, COL_BLUE, x1, y1, COL_BLUE, 2.0f, 0.6f);
+        }
+        snprintf(buf, sizeof(buf), "$%.0f", max_price);
+        draw_text(buf, 27, 143, 0.34f, COL_MUTED);
+        snprintf(buf, sizeof(buf), "$%.0f", min_price);
+        draw_text(buf, 27, 198, 0.34f, COL_MUTED);
+    } else {
+        draw_text("Waiting for oracle history", 28, 166, 0.42f, COL_MUTED);
     }
-    draw_rect(26, 194, 220, 1, COL_LINE);
 
-    draw_card(273, 105, 113, 48, COL_SURFACE, COL_LINE);
-    draw_text("STRIKE", 285, 124, 0.30f, COL_MUTED);
+    draw_card(273, 101, 113, 48, COL_SURFACE, COL_LINE);
+    draw_text("STRIKE", 285, 121, 0.38f, COL_MUTED);
     snprintf(buf, sizeof(buf), "$%.0f", market->strike);
-    draw_text(buf, 285, 145, 0.53f, COL_INK);
+    draw_text(buf, 285, 143, 0.50f, COL_INK);
 
-    draw_card(273, 161, 113, 48, COL_SURFACE, COL_LINE);
-    draw_text("SESSION FUNDS", 285, 180, 0.27f, COL_MUTED);
+    draw_card(273, 156, 113, 48, COL_SURFACE, COL_LINE);
+    draw_text("EXPIRES IN", 285, 176, 0.38f, COL_MUTED);
+    long long remaining = market->expiry - (long long)osGetTime();
+    if (remaining < 0) remaining = 0;
+    snprintf(buf, sizeof(buf), "%02lld:%02lld", remaining / 60000, (remaining / 1000) % 60);
+    draw_text(buf, 285, 198, 0.50f, remaining > 60000 ? COL_INK : COL_CORAL);
+
+    draw_text("FUNDS", 16, 227, 0.37f, COL_MUTED);
     snprintf(buf, sizeof(buf), "%s dUSDC", market->dusdc_balance);
-    draw_text(buf, 285, 201, 0.43f, COL_INK);
-
-    draw_text("UP", 16, 229, 0.31f, COL_GREEN);
-    snprintf(buf, sizeof(buf), "%.1fc", market->up_price * 100.0f);
-    draw_text(buf, 39, 229, 0.38f, COL_INK);
-    draw_text("DOWN", 91, 229, 0.31f, COL_CORAL);
-    snprintf(buf, sizeof(buf), "%.1fc", market->down_price * 100.0f);
-    draw_text(buf, 130, 229, 0.38f, COL_INK);
+    draw_text(buf, 62, 228, 0.40f, COL_INK);
+    snprintf(buf, sizeof(buf), "UP %.1fc", market->up_price * 100.0f);
+    draw_text(buf, 170, 228, 0.40f, COL_GREEN);
+    snprintf(buf, sizeof(buf), "DOWN %.1fc", market->down_price * 100.0f);
+    draw_text(buf, 250, 228, 0.40f, COL_CORAL);
 
     if (session_id && session_id[0]) {
-        snprintf(buf, sizeof(buf), "SESSION %.8s", session_id);
-        draw_text(buf, 292, 229, 0.27f, COL_MUTED);
+        snprintf(buf, sizeof(buf), "%.6s", session_id);
+        draw_text(buf, 356, 228, 0.34f, COL_MUTED);
     }
 }
 
@@ -269,9 +287,9 @@ static void draw_action_button(
     } else {
         draw_card(x, y, w, h, fill, strong);
     }
-    draw_text(is_up ? "BTC ABOVE" : "BTC BELOW", x + 14, y + 25, 0.32f, text);
+    draw_text(is_up ? "BTC ABOVE" : "BTC BELOW", x + 14, y + 25, 0.40f, text);
     draw_text(is_up ? "UP" : "DOWN", x + 14, y + 70, 0.90f, text);
-    draw_text("MAX 1 dUSDC", x + 14, y + 92, 0.31f, text);
+    draw_text("1 POSITION", x + 14, y + 94, 0.38f, text);
     if (selected) {
         draw_pill(x + w - 40, y + 10, 28, 18, COL_BLUE);
         draw_text("A", x + w - 30, y + 23, 0.34f, COL_WHITE);
@@ -281,7 +299,7 @@ static void draw_action_button(
 static void draw_pairing_bottom(const char* message) {
     draw_text("Connect DeepDS", 18, 54, 0.72f, COL_INK);
     draw_text("Keep the full QR and white border visible.", 18, 80, 0.35f, COL_MUTED);
-    draw_text("QR CAMERA v1.0", 220, 54, 0.25f, COL_BLUE);
+    draw_text("QR CAMERA v1.1", 220, 54, 0.34f, COL_BLUE);
 
     draw_card(18, 98, 284, 75, COL_SURFACE, COL_BLUE);
     draw_rect(34, 114, 28, 3, COL_BLUE);
@@ -325,7 +343,7 @@ void ui_draw_bottom(
     }
 
     draw_text("Choose the next move", 14, 50, 0.56f, COL_INK);
-    draw_text("< > focus   A buy   L UP   R DOWN", 14, 64, 0.27f, COL_MUTED);
+    draw_text("< > FOCUS   A BUY   L UP   R DOWN", 14, 64, 0.34f, COL_MUTED);
     draw_action_button(
         BTN_BUY_X, BTN_BUY_Y, BTN_BUY_W, BTN_BUY_H,
         up_pressed, selected_action == 0, 1
@@ -355,15 +373,21 @@ void ui_draw_bottom(
     );
     draw_text("START  EXIT", BTN_QUIT_X + 29, BTN_QUIT_Y + 25, 0.34f, COL_MUTED);
 
-    if (last_trade && last_trade->show) {
+    if (message && message[0]) {
+        draw_pill(26, 224, 268, 14, COL_BLUE);
+        draw_text(message, 50, 236, 0.34f, COL_WHITE);
+    } else if (last_trade && last_trade->show) {
         u32 fill = last_trade->success ? COL_GREEN : COL_CORAL;
         draw_pill(26, 224, 268, 14, fill);
-        if (last_trade->success) {
-            snprintf(buf, sizeof(buf), "FILLED  %.20s", last_trade->digest);
-        } else {
-            snprintf(buf, sizeof(buf), "TRADE FAILED");
-        }
-        draw_text(buf, 54, 236, 0.27f, COL_WHITE);
+        snprintf(
+            buf,
+            sizeof(buf),
+            "%.42s",
+            last_trade->message[0]
+                ? last_trade->message
+                : (last_trade->success ? "ORDER FILLED" : "ORDER FAILED")
+        );
+        draw_text(buf, 42, 236, 0.32f, COL_WHITE);
     }
 }
 

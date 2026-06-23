@@ -54,10 +54,14 @@
 
 typedef struct {
     float spot;
+    float forward;
     float strike;
     float up_price;
     float down_price;
+    float history[24];
+    int history_count;
     long long expiry;
+    long long updated_at;
     char sui_balance[16];
     char dusdc_balance[16];
     int data_valid;
@@ -66,6 +70,7 @@ typedef struct {
 typedef struct {
     int success;
     char digest[24];
+    char message[72];
     int show;
     int countdown;
 } TradeResult;

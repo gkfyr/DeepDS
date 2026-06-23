@@ -88,8 +88,20 @@ router.post('/', async (req: Request, res: Response) => {
       ],
     });
 
-    const result = await execute(tx, keypair);
-    const response: TradeResponse = { ok: 1, digest: result.digest };
+    const result = await execute(tx, keypair, true);
+    const mintEvent = result.events?.find((event) =>
+      event.type.endsWith('::predict::PositionMinted'),
+    );
+    const parsed = mintEvent?.parsedJson as
+      | { cost?: string | number; ask_price?: string | number }
+      | undefined;
+    const response: TradeResponse = {
+      ok: 1,
+      digest: result.digest,
+      cost: parsed?.cost !== undefined ? String(parsed.cost) : undefined,
+      askPrice:
+        parsed?.ask_price !== undefined ? String(parsed.ask_price) : undefined,
+    };
     res.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

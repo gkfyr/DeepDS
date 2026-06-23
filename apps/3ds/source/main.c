@@ -46,6 +46,30 @@ static int json_value(const char* j, const char* k, char* out, size_t sz) {
     return i > 0;
 }
 
+static int json_float_array(
+    const char* json,
+    const char* key,
+    float* out,
+    int max_values
+) {
+    char search[64];
+    snprintf(search, sizeof(search), "\"%s\":[", key);
+    const char* p = strstr(json, search);
+    if (!p) return 0;
+    p += strlen(search);
+
+    int count = 0;
+    while (*p && *p != ']' && count < max_values) {
+        while (*p == ' ' || *p == ',') p++;
+        char* end = NULL;
+        float value = strtof(p, &end);
+        if (end == p) break;
+        out[count++] = value;
+        p = end;
+    }
+    return count;
+}
+
 /* ---- App State ---- */
 typedef enum {
     STATE_QR_SCAN,
@@ -60,6 +84,23 @@ static MarketDisplay g_market;
 static TradeResult   g_trade_result;
 static int g_qr_scanner_ready = 0;
 static unsigned int g_loading_frame = 0;
+static LightLock g_data_lock;
+static LightEvent g_network_request;
+static Thread g_network_thread;
+static volatile int g_network_running = 0;
+static volatile int g_network_busy = 0;
+static volatile int g_network_complete = 0;
+static volatile int g_network_task = 0;
+static int g_verify_status = 0;
+static char g_verify_response[128];
+
+enum {
+    NET_TASK_NONE = 0,
+    NET_TASK_VERIFY,
+    NET_TASK_REFRESH,
+    NET_TASK_TRADE_UP,
+    NET_TASK_TRADE_DOWN,
+};
 
 /* Timing */
 static u64 g_last_market_fetch = 0;
@@ -99,22 +140,40 @@ static void fetch_market_data(void) {
 
     int status = http_get(url, buf, sizeof(buf));
     if (status != 200) {
-        g_market.data_valid = 0;
         return;
     }
 
-    /* Parse flat Predict market JSON. */
+    MarketDisplay next;
+    LightLock_Lock(&g_data_lock);
+    next = g_market;
+    LightLock_Unlock(&g_data_lock);
+
     char tmp[32];
     if (json_value(buf, "spot", tmp, sizeof(tmp)))
-        g_market.spot = (float)atof(tmp);
+        next.spot = (float)atof(tmp);
+    if (json_value(buf, "forward", tmp, sizeof(tmp)))
+        next.forward = (float)atof(tmp);
     if (json_value(buf, "strike", tmp, sizeof(tmp)))
-        g_market.strike = (float)atof(tmp);
+        next.strike = (float)atof(tmp);
     if (json_value(buf, "up", tmp, sizeof(tmp)))
-        g_market.up_price = (float)atof(tmp);
+        next.up_price = (float)atof(tmp);
     if (json_value(buf, "down", tmp, sizeof(tmp)))
-        g_market.down_price = (float)atof(tmp);
+        next.down_price = (float)atof(tmp);
+    if (json_value(buf, "expiry", tmp, sizeof(tmp)))
+        next.expiry = atoll(tmp);
+    if (json_value(buf, "ts", tmp, sizeof(tmp)))
+        next.updated_at = atoll(tmp);
+    next.history_count = json_float_array(
+        buf,
+        "history",
+        next.history,
+        24
+    );
 
-    g_market.data_valid = 1;
+    next.data_valid = 1;
+    LightLock_Lock(&g_data_lock);
+    g_market = next;
+    LightLock_Unlock(&g_data_lock);
 }
 
 /* ---- Fetch balance from proxy ---- */
@@ -126,11 +185,17 @@ static void fetch_balance(void) {
     int status = http_get(url, buf, sizeof(buf));
     if (status != 200) return;
 
-    char tmp[32];
-    if (json_value(buf, "sui", tmp, sizeof(tmp)))
-        snprintf(g_market.sui_balance, sizeof(g_market.sui_balance), "%.15s", tmp);
-    if (json_value(buf, "dusdc", tmp, sizeof(tmp)))
-        snprintf(g_market.dusdc_balance, sizeof(g_market.dusdc_balance), "%.15s", tmp);
+    char sui_balance[16] = {0};
+    char dusdc_balance[16] = {0};
+    json_value(buf, "sui", sui_balance, sizeof(sui_balance));
+    json_value(buf, "dusdc", dusdc_balance, sizeof(dusdc_balance));
+
+    LightLock_Lock(&g_data_lock);
+    if (sui_balance[0])
+        snprintf(g_market.sui_balance, sizeof(g_market.sui_balance), "%.15s", sui_balance);
+    if (dusdc_balance[0])
+        snprintf(g_market.dusdc_balance, sizeof(g_market.dusdc_balance), "%.15s", dusdc_balance);
+    LightLock_Unlock(&g_data_lock);
 }
 
 /* ---- Execute trade ---- */
@@ -147,21 +212,44 @@ static void execute_trade(const char* action) {
 
     /* Parse response */
     char ok_str[8];
-    g_trade_result.show = 1;
-    g_trade_result.countdown = TRADE_RESULT_FRAMES;
+    TradeResult result;
+    memset(&result, 0, sizeof(result));
+    result.show = 1;
+    result.countdown = TRADE_RESULT_FRAMES;
 
     if (status == 200 && json_value(buf, "ok", ok_str, sizeof(ok_str))
         && ok_str[0] == '1') {
-        g_trade_result.success = 1;
+        result.success = 1;
         char digest[64] = {0};
+        char cost[32] = {0};
         json_value(buf, "digest", digest, sizeof(digest));
-        /* Show first 20 chars of digest */
-        strncpy(g_trade_result.digest, digest, 20);
-        g_trade_result.digest[20] = '\0';
+        json_value(buf, "cost", cost, sizeof(cost));
+        snprintf(result.digest, sizeof(result.digest), "%.20s", digest);
+        if (cost[0]) {
+            snprintf(
+                result.message,
+                sizeof(result.message),
+                "FILLED %.4f dUSDC",
+                atof(cost) / 1000000.0
+            );
+        } else {
+            snprintf(result.message, sizeof(result.message), "ORDER FILLED");
+        }
     } else {
-        g_trade_result.success = 0;
-        strncpy(g_trade_result.digest, "TRADE FAILED", sizeof(g_trade_result.digest) - 1);
+        char error[72] = {0};
+        result.success = 0;
+        json_value(buf, "error", error, sizeof(error));
+        snprintf(
+            result.message,
+            sizeof(result.message),
+            "%.68s",
+            error[0] ? error : (status > 0 ? "ORDER REJECTED" : "NETWORK ERROR")
+        );
     }
+
+    LightLock_Lock(&g_data_lock);
+    g_trade_result = result;
+    LightLock_Unlock(&g_data_lock);
 }
 
 /* ---- Software keyboard for manual URL/SID entry (PoC fallback) ---- */
@@ -194,6 +282,62 @@ static int verify_session(char* response, size_t response_size) {
     return status;
 }
 
+static void network_thread_main(void* unused) {
+    (void)unused;
+    while (g_network_running) {
+        LightEvent_Wait(&g_network_request);
+        if (!g_network_running) break;
+
+        int task = g_network_task;
+        if (task == NET_TASK_VERIFY) {
+            g_verify_status = verify_session(
+                g_verify_response,
+                sizeof(g_verify_response)
+            );
+        } else if (task == NET_TASK_REFRESH) {
+            fetch_market_data();
+            fetch_balance();
+        } else if (task == NET_TASK_TRADE_UP) {
+            execute_trade("UP");
+            fetch_balance();
+        } else if (task == NET_TASK_TRADE_DOWN) {
+            execute_trade("DOWN");
+            fetch_balance();
+        }
+
+        g_network_task = task;
+        g_network_complete = 1;
+        g_network_busy = 0;
+    }
+}
+
+static int queue_network_task(int task) {
+    if (g_network_busy) return 0;
+    g_network_complete = 0;
+    g_network_task = task;
+    g_network_busy = 1;
+    LightEvent_Signal(&g_network_request);
+    return 1;
+}
+
+static int take_completed_task(void) {
+    if (!g_network_complete) return NET_TASK_NONE;
+    int task = g_network_task;
+    g_network_complete = 0;
+    g_network_task = NET_TASK_NONE;
+    return task;
+}
+
+static void copy_ui_state(
+    MarketDisplay* market,
+    TradeResult* trade
+) {
+    LightLock_Lock(&g_data_lock);
+    *market = g_market;
+    *trade = g_trade_result;
+    LightLock_Unlock(&g_data_lock);
+}
+
 /* ==============================================================
    MAIN ENTRY POINT
    ============================================================== */
@@ -223,6 +367,25 @@ int main(int argc, char* argv[]) {
 
     /* Initialize network */
     int net_ok = (network_init() == 0);
+    LightLock_Init(&g_data_lock);
+    LightEvent_Init(&g_network_request, RESET_ONESHOT);
+    if (net_ok) {
+        s32 main_priority = 0x30;
+        svcGetThreadPriority(&main_priority, CUR_THREAD_HANDLE);
+        g_network_running = 1;
+        g_network_thread = threadCreate(
+            network_thread_main,
+            NULL,
+            32 * 1024,
+            main_priority - 1,
+            -2,
+            false
+        );
+        if (!g_network_thread) {
+            g_network_running = 0;
+            net_ok = 0;
+        }
+    }
 
     /* Initialize QR scanner. Manual pairing remains available on failure. */
     g_qr_scanner_ready = (qr_scanner_init() == 0);
@@ -230,6 +393,7 @@ int main(int argc, char* argv[]) {
     int buy_pressed_frame  = 0;
     int sell_pressed_frame = 0;
     int selected_action = 0;
+    int connect_phase = 0;
 
     /* ---- Main loop ---- */
     while (aptMainLoop()) {
@@ -316,6 +480,7 @@ int main(int argc, char* argv[]) {
                     qr_scanner_exit();
                     g_qr_scanner_ready = 0;
                     has_preview = 0;
+                    connect_phase = 0;
                     g_state = STATE_CONNECTING;
                 }
             } else if (scanned < 0) {
@@ -326,6 +491,7 @@ int main(int argc, char* argv[]) {
                 qr_scanner_exit();
                 g_qr_scanner_ready = 0;
                 if (enter_session_manual()) {
+                    connect_phase = 0;
                     g_state = STATE_CONNECTING;
                 } else {
                     g_qr_scanner_ready = (qr_scanner_init() == 0);
@@ -359,68 +525,76 @@ int main(int argc, char* argv[]) {
             C3D_FrameEnd(0);
 
         } else if (g_state == STATE_CONNECTING) {
-            char verify_response[128] = {0};
-            render_loading(top, bot, "Pairing console", "Checking session");
+            render_loading(
+                top,
+                bot,
+                connect_phase < 2 ? "Pairing console" : "Loading market",
+                connect_phase < 2 ? "Checking session" : "Fetching live data"
+            );
             if (!net_ok) {
                 snprintf(g_error_msg, sizeof(g_error_msg), "NETWORK INIT FAILED");
                 g_state = STATE_ERROR;
+            } else if (connect_phase == 0) {
+                if (queue_network_task(NET_TASK_VERIFY)) connect_phase = 1;
             } else {
-                int verify_status = verify_session(
-                    verify_response,
-                    sizeof(verify_response)
-                );
-                if (verify_status == 200) {
-                    /* Connected! Fetch initial data */
-                    render_loading(top, bot, "Loading market", "Fetching prices");
-                    fetch_market_data();
-                    render_loading(top, bot, "Loading wallet", "Reading allowance");
-                    fetch_balance();
+                int completed = take_completed_task();
+                if (completed == NET_TASK_VERIFY) {
+                    if (g_verify_status == 200) {
+                        queue_network_task(NET_TASK_REFRESH);
+                        connect_phase = 2;
+                    } else if (g_verify_status == 404) {
+                        snprintf(
+                            g_error_msg,
+                            sizeof(g_error_msg),
+                            "SESSION NOT FOUND OR EXPIRED"
+                        );
+                        g_state = STATE_ERROR;
+                    } else if (g_verify_status > 0) {
+                        snprintf(
+                            g_error_msg,
+                            sizeof(g_error_msg),
+                            "PROXY HTTP %d: %.80s",
+                            g_verify_status,
+                            g_verify_response
+                        );
+                        g_state = STATE_ERROR;
+                    } else {
+                        snprintf(
+                            g_error_msg,
+                            sizeof(g_error_msg),
+                            "NETWORK ERROR 0x%08lX",
+                            (unsigned long)network_last_result()
+                        );
+                        g_state = STATE_ERROR;
+                    }
+                } else if (completed == NET_TASK_REFRESH && connect_phase == 2) {
                     g_last_market_fetch = osGetTime();
                     g_state = STATE_TRADING;
-                } else if (verify_status == 404) {
-                    snprintf(
-                        g_error_msg,
-                        sizeof(g_error_msg),
-                        "SESSION NOT FOUND OR EXPIRED"
-                    );
-                    g_state = STATE_ERROR;
-                } else if (verify_status > 0) {
-                    snprintf(
-                        g_error_msg,
-                        sizeof(g_error_msg),
-                        "PROXY HTTP %d: %.80s",
-                        verify_status,
-                        verify_response
-                    );
-                    g_state = STATE_ERROR;
-                } else {
-                    snprintf(
-                        g_error_msg,
-                        sizeof(g_error_msg),
-                        "HTTPS ERROR 0x%08lX",
-                        (unsigned long)network_last_result()
-                    );
-                    g_state = STATE_ERROR;
                 }
             }
 
         } else if (g_state == STATE_TRADING) {
-            /* ---- Periodic market data fetch ---- */
-            u64 now = osGetTime();
-            if (now - g_last_market_fetch > MARKET_POLL_INTERVAL_MS) {
-                render_loading(top, bot, "Updating market", "Syncing latest data");
-                fetch_market_data();
-                fetch_balance();
+            int completed = take_completed_task();
+            if (completed != NET_TASK_NONE) {
                 g_last_market_fetch = osGetTime();
             }
 
+            /* ---- Periodic market data fetch ---- */
+            u64 now = osGetTime();
+            if (!g_network_busy &&
+                now - g_last_market_fetch > MARKET_POLL_INTERVAL_MS) {
+                queue_network_task(NET_TASK_REFRESH);
+            }
+
             /* ---- Trade result countdown ---- */
+            LightLock_Lock(&g_data_lock);
             if (g_trade_result.show && g_trade_result.countdown > 0) {
                 g_trade_result.countdown--;
                 if (g_trade_result.countdown == 0) {
                     g_trade_result.show = 0;
                 }
             }
+            LightLock_Unlock(&g_data_lock);
 
             /* ---- Touch input (bottom screen) ---- */
             buy_pressed_frame  = 0;
@@ -430,34 +604,24 @@ int main(int argc, char* argv[]) {
                 selected_action = 1 - selected_action;
             }
 
-            if (keys_down & KEY_L) {
+            if (!g_network_busy && (keys_down & KEY_L)) {
                 selected_action = 0;
                 buy_pressed_frame = 1;
-                render_loading(top, bot, "Buying UP", "Submitting prediction");
-                execute_trade("UP");
-                fetch_balance();
-            } else if (keys_down & KEY_R) {
+                queue_network_task(NET_TASK_TRADE_UP);
+            } else if (!g_network_busy && (keys_down & KEY_R)) {
                 selected_action = 1;
                 sell_pressed_frame = 1;
-                render_loading(top, bot, "Buying DOWN", "Submitting prediction");
-                execute_trade("DOWN");
-                fetch_balance();
-            } else if (keys_down & KEY_A) {
+                queue_network_task(NET_TASK_TRADE_DOWN);
+            } else if (!g_network_busy && (keys_down & KEY_A)) {
                 if (selected_action == 0) {
                     buy_pressed_frame = 1;
-                    render_loading(top, bot, "Buying UP", "Submitting prediction");
-                    execute_trade("UP");
+                    queue_network_task(NET_TASK_TRADE_UP);
                 } else {
                     sell_pressed_frame = 1;
-                    render_loading(top, bot, "Buying DOWN", "Submitting prediction");
-                    execute_trade("DOWN");
+                    queue_network_task(NET_TASK_TRADE_DOWN);
                 }
-                fetch_balance();
-            } else if (keys_down & KEY_X) {
-                render_loading(top, bot, "Updating market", "Syncing latest data");
-                fetch_market_data();
-                fetch_balance();
-                g_last_market_fetch = osGetTime();
+            } else if (!g_network_busy && (keys_down & KEY_X)) {
+                queue_network_task(NET_TASK_REFRESH);
             }
 
             if (hidKeysHeld() & KEY_TOUCH) {
@@ -467,25 +631,18 @@ int main(int argc, char* argv[]) {
                 if (ui_touch_in_buy(touch.px, touch.py)) {
                     selected_action = 0;
                     buy_pressed_frame = 1;
-                    if (keys_down & KEY_TOUCH) {
-                        render_loading(top, bot, "Buying UP", "Submitting prediction");
-                        execute_trade("UP");
-                        fetch_balance();
+                    if (!g_network_busy && (keys_down & KEY_TOUCH)) {
+                        queue_network_task(NET_TASK_TRADE_UP);
                     }
                 } else if (ui_touch_in_down(touch.px, touch.py)) {
                     selected_action = 1;
                     sell_pressed_frame = 1;
-                    if (keys_down & KEY_TOUCH) {
-                        render_loading(top, bot, "Buying DOWN", "Submitting prediction");
-                        execute_trade("DOWN");
-                        fetch_balance();
+                    if (!g_network_busy && (keys_down & KEY_TOUCH)) {
+                        queue_network_task(NET_TASK_TRADE_DOWN);
                     }
                 } else if (ui_touch_in_refresh(touch.px, touch.py)) {
-                    if (keys_down & KEY_TOUCH) {
-                        render_loading(top, bot, "Updating market", "Syncing latest data");
-                        fetch_market_data();
-                        fetch_balance();
-                        g_last_market_fetch = osGetTime();
+                    if (!g_network_busy && (keys_down & KEY_TOUCH)) {
+                        queue_network_task(NET_TASK_REFRESH);
                     }
                 } else if (ui_touch_in_quit(touch.px, touch.py)) {
                     if (keys_down & KEY_TOUCH) break;
@@ -493,22 +650,32 @@ int main(int argc, char* argv[]) {
             }
 
             /* ---- Render frames ---- */
+            MarketDisplay market_snapshot;
+            TradeResult trade_snapshot;
+            copy_ui_state(&market_snapshot, &trade_snapshot);
+            const char* activity = "";
+            if (g_network_busy) {
+                if (g_network_task == NET_TASK_REFRESH) activity = "Updating live data...";
+                else if (g_network_task == NET_TASK_TRADE_UP) activity = "Buying UP...";
+                else if (g_network_task == NET_TASK_TRADE_DOWN) activity = "Buying DOWN...";
+            }
+
             ui_begin_frame();
             C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
 
             C2D_TargetClear(top, COL_BLACK);
             C2D_SceneBegin(top);
-            ui_draw_top(&g_market, g_session.sid, "TRADING");
+            ui_draw_top(&market_snapshot, g_session.sid, "TRADING");
 
             C2D_TargetClear(bot, COL_BLACK);
             C2D_SceneBegin(bot);
             ui_draw_bottom(
-                &g_trade_result,
+                &trade_snapshot,
                 buy_pressed_frame,
                 sell_pressed_frame,
                 selected_action,
                 "TRADING",
-                ""
+                activity
             );
 
             C3D_FrameEnd(0);
@@ -518,7 +685,12 @@ int main(int argc, char* argv[]) {
             if (keys_down & KEY_A) {
                 session_clear();
                 g_state = STATE_QR_SCAN;
+                LightLock_Lock(&g_data_lock);
                 memset(&g_market, 0, sizeof(g_market));
+                memset(&g_trade_result, 0, sizeof(g_trade_result));
+                snprintf(g_market.sui_balance, sizeof(g_market.sui_balance), "0.0000");
+                snprintf(g_market.dusdc_balance, sizeof(g_market.dusdc_balance), "0.00");
+                LightLock_Unlock(&g_data_lock);
                 g_qr_scanner_ready = (qr_scanner_init() == 0);
             }
 
@@ -546,6 +718,13 @@ int main(int argc, char* argv[]) {
 
     /* ---- Cleanup ---- */
     qr_scanner_exit();
+    if (g_network_thread) {
+        g_network_running = 0;
+        LightEvent_Signal(&g_network_request);
+        threadJoin(g_network_thread, U64_MAX);
+        threadFree(g_network_thread);
+        g_network_thread = NULL;
+    }
     network_exit();
     ui_exit();
     C2D_Fini();

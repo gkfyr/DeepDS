@@ -19,9 +19,11 @@ export interface TradeRequest {
 
 export interface MarketDataResponse {
   spot: number;
+  forward: number;
   strike: number;
   up: number;
   down: number;
+  history: number[];
   expiry: number;
   oracle: string;
   status: string;
@@ -31,6 +33,8 @@ export interface MarketDataResponse {
 export interface TradeResponse {
   ok: 0 | 1;
   digest?: string;
+  cost?: string;
+  askPrice?: string;
   error?: string;
 }
 
