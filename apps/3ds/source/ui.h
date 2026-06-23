@@ -33,24 +33,24 @@
 
 /* Large, thumb-friendly controls */
 #define BTN_BUY_X       12
-#define BTN_BUY_Y       66
+#define BTN_BUY_Y       72
 #define BTN_BUY_W       142
-#define BTN_BUY_H       104
+#define BTN_BUY_H       100
 
 #define BTN_SELL_X      166
-#define BTN_SELL_Y      66
+#define BTN_SELL_Y      72
 #define BTN_SELL_W      142
-#define BTN_SELL_H      104
+#define BTN_SELL_H      100
 
 #define BTN_REFRESH_X   12
-#define BTN_REFRESH_Y   184
+#define BTN_REFRESH_Y   181
 #define BTN_REFRESH_W   142
-#define BTN_REFRESH_H   38
+#define BTN_REFRESH_H   28
 
 #define BTN_QUIT_X      166
-#define BTN_QUIT_Y      184
+#define BTN_QUIT_Y      181
 #define BTN_QUIT_W      142
-#define BTN_QUIT_H      38
+#define BTN_QUIT_H      28
 
 typedef struct {
     float spot;

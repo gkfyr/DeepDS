@@ -208,10 +208,10 @@ void ui_draw_top(
     draw_text(buf, 16, 88, 0.86f, COL_INK);
 
     long long age_ms = (long long)osGetTime() - market->updated_at;
-    draw_pill(294, 43, 90, 26, age_ms < 15000 ? COL_GREEN_SOFT : COL_CORAL_SOFT);
-    draw_rect(305, 53, 7, 7, age_ms < 15000 ? COL_GREEN : COL_CORAL);
-    snprintf(buf, sizeof(buf), "%llds AGO", age_ms > 0 ? age_ms / 1000 : 0);
-    draw_text(buf, 320, 62, 0.38f, age_ms < 15000 ? COL_GREEN : COL_CORAL);
+    int is_live = age_ms >= 0 && age_ms < 15000;
+    draw_pill(320, 43, 64, 26, is_live ? COL_GREEN_SOFT : COL_CORAL_SOFT);
+    draw_rect(330, 53, 7, 7, is_live ? COL_GREEN : COL_CORAL);
+    draw_text(is_live ? "LIVE" : "STALE", 345, 62, 0.38f, is_live ? COL_GREEN : COL_CORAL);
 
     draw_card(14, 101, 250, 103, COL_SURFACE, COL_LINE);
     draw_text("REAL PRICE HISTORY", 26, 123, 0.39f, COL_MUTED);
@@ -299,7 +299,7 @@ static void draw_action_button(
 static void draw_pairing_bottom(const char* message) {
     draw_text("Connect DeepDS", 18, 54, 0.72f, COL_INK);
     draw_text("Keep the full QR and white border visible.", 18, 80, 0.35f, COL_MUTED);
-    draw_text("QR CAMERA v1.1", 220, 54, 0.34f, COL_BLUE);
+    draw_text("QR CAMERA v1.2", 220, 54, 0.34f, COL_BLUE);
 
     draw_card(18, 98, 284, 75, COL_SURFACE, COL_BLUE);
     draw_rect(34, 114, 28, 3, COL_BLUE);
@@ -361,7 +361,7 @@ void ui_draw_bottom(
         COL_SURFACE,
         COL_LINE
     );
-    draw_text("X  REFRESH", BTN_REFRESH_X + 27, BTN_REFRESH_Y + 25, 0.36f, COL_BLUE);
+    draw_text("X  REFRESH", BTN_REFRESH_X + 27, BTN_REFRESH_Y + 20, 0.36f, COL_BLUE);
 
     draw_card(
         BTN_QUIT_X,
@@ -371,7 +371,7 @@ void ui_draw_bottom(
         COL_SURFACE,
         COL_LINE
     );
-    draw_text("START  EXIT", BTN_QUIT_X + 29, BTN_QUIT_Y + 25, 0.34f, COL_MUTED);
+    draw_text("START  EXIT", BTN_QUIT_X + 29, BTN_QUIT_Y + 20, 0.34f, COL_MUTED);
 
     if (message && message[0]) {
         draw_pill(26, 224, 268, 14, COL_BLUE);

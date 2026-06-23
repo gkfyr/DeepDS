@@ -25,6 +25,7 @@ export interface MarketDataResponse {
   down: number;
   history: number[];
   expiry: number;
+  expiresInMs: number;
   oracle: string;
   status: string;
   ts: number;                    // Timestamp

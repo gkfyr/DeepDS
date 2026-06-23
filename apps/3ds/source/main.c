@@ -159,10 +159,9 @@ static void fetch_market_data(void) {
         next.up_price = (float)atof(tmp);
     if (json_value(buf, "down", tmp, sizeof(tmp)))
         next.down_price = (float)atof(tmp);
-    if (json_value(buf, "expiry", tmp, sizeof(tmp)))
-        next.expiry = atoll(tmp);
-    if (json_value(buf, "ts", tmp, sizeof(tmp)))
-        next.updated_at = atoll(tmp);
+    if (json_value(buf, "expiresInMs", tmp, sizeof(tmp)))
+        next.expiry = (long long)osGetTime() + atoll(tmp);
+    next.updated_at = (long long)osGetTime();
     next.history_count = json_float_array(
         buf,
         "history",

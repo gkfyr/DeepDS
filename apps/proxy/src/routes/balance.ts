@@ -16,6 +16,28 @@ import type { BalanceResponse } from '../types.js';
 import { DUMMY_MODE } from '../config.js';
 
 const router = Router();
+const PREDICT_SERVER =
+  process.env.PREDICT_SERVER_URL ?? 'https://predict-server.testnet.mystenlabs.com';
+
+interface ManagerSummary {
+  balances?: Array<{ quote_asset: string; balance: number | string }>;
+}
+
+async function getManagerDusdcBalance(managerId?: string): Promise<bigint | null> {
+  if (!managerId) return null;
+  const response = await fetch(
+    `${PREDICT_SERVER}/managers/${managerId}/summary`,
+    { signal: AbortSignal.timeout(5000) },
+  );
+  if (!response.ok) return null;
+  const summary = (await response.json()) as ManagerSummary;
+  const balance = summary.balances?.find(
+    (item) =>
+      item.quote_asset === DUSDC_TYPE ||
+      item.quote_asset === DUSDC_TYPE.replace(/^0x/, ''),
+  );
+  return balance ? BigInt(balance.balance) : null;
+}
 
 // GET /api/balance/:sid
 router.get('/:sid', async (req: Request, res: Response) => {
@@ -45,13 +67,15 @@ router.get('/:sid', async (req: Request, res: Response) => {
       return;
     }
 
-    const [suiRaw, dusdcRaw] = await Promise.all([
+    const [suiRaw, walletDusdcRaw, managerDusdcRaw] = await Promise.all([
       getCoinBalance(session.ephemeralAddress, '0x2::sui::SUI'),
       getCoinBalance(session.ephemeralAddress, DUSDC_TYPE),
+      getManagerDusdcBalance(session.managerId),
     ]);
 
     // Convert from MIST (9 decimals) to SUI, and from USDC base units (6 decimals)
     const suiAmount = (Number(suiRaw) / 1e9).toFixed(4);
+    const dusdcRaw = managerDusdcRaw ?? walletDusdcRaw;
     const dusdcAmount = (Number(dusdcRaw) / 1e6).toFixed(2);
 
     const resp: BalanceResponse = {
