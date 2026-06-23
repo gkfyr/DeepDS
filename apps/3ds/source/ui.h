@@ -32,15 +32,15 @@
 #define COL_BLACK       COL_BG
 
 /* Large, thumb-friendly controls */
-#define BTN_BUY_X       12
-#define BTN_BUY_Y       105
-#define BTN_BUY_W       142
-#define BTN_BUY_H       88
+#define BTN_BUY_X       10
+#define BTN_BUY_Y       18
+#define BTN_BUY_W       148
+#define BTN_BUY_H       176
 
-#define BTN_SELL_X      166
-#define BTN_SELL_Y      105
-#define BTN_SELL_W      142
-#define BTN_SELL_H      88
+#define BTN_SELL_X      162
+#define BTN_SELL_Y      18
+#define BTN_SELL_W      148
+#define BTN_SELL_H      176
 
 typedef struct {
     float spot;
