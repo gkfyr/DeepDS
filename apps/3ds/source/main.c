@@ -91,6 +91,7 @@ static volatile int g_network_running = 0;
 static volatile int g_network_busy = 0;
 static volatile int g_network_complete = 0;
 static volatile int g_network_task = 0;
+static volatile int g_order_quantity = 1;
 static int g_verify_status = 0;
 static char g_verify_response[128];
 
@@ -105,10 +106,9 @@ enum {
 /* Timing */
 static u64 g_last_market_fetch = 0;
 #define MARKET_POLL_INTERVAL_MS  10000ULL
-#define TRADE_RESULT_FRAMES      120                 /* ~2 seconds at 60fps */
-
-/* Trade quantity: 1 SUI = 1,000,000,000 MIST */
-#define TRADE_QTY_STR  "1000000"
+#define TRADE_QUANTITY_BASE      1000000ULL
+#define TRADE_QUANTITY_MIN       1
+#define TRADE_QUANTITY_MAX       10
 
 /* ---- Build URL helpers ---- */
 static void build_url(char* out, size_t sz, const char* endpoint) {
@@ -198,14 +198,15 @@ static void fetch_balance(void) {
 }
 
 /* ---- Execute trade ---- */
-static void execute_trade(const char* action) {
+static void execute_trade(const char* action, int positions) {
     char url[256], body[256], buf[NET_BUF_SIZE];
     build_url(url, sizeof(url), "/api/trade");
 
-    /* Form-encoded body: sid=...&action=UP&qty=1000000 */
+    unsigned long long quantity =
+        (unsigned long long)positions * TRADE_QUANTITY_BASE;
     snprintf(body, sizeof(body),
-             "sid=%s&action=%s&qty=%s",
-             g_session.sid, action, TRADE_QTY_STR);
+             "sid=%s&action=%s&qty=%llu",
+             g_session.sid, action, quantity);
 
     int status = http_post(url, body, buf, sizeof(buf));
 
@@ -214,7 +215,9 @@ static void execute_trade(const char* action) {
     TradeResult result;
     memset(&result, 0, sizeof(result));
     result.show = 1;
-    result.countdown = TRADE_RESULT_FRAMES;
+    result.countdown = 0;
+    result.quantity = positions;
+    snprintf(result.action, sizeof(result.action), "%.7s", action);
 
     if (status == 200 && json_value(buf, "ok", ok_str, sizeof(ok_str))
         && ok_str[0] == '1') {
@@ -228,11 +231,11 @@ static void execute_trade(const char* action) {
             snprintf(
                 result.message,
                 sizeof(result.message),
-                "FILLED %.4f dUSDC",
+                "%.4f dUSDC",
                 atof(cost) / 1000000.0
             );
         } else {
-            snprintf(result.message, sizeof(result.message), "ORDER FILLED");
+            snprintf(result.message, sizeof(result.message), "FILLED");
         }
     } else {
         char error[72] = {0};
@@ -297,10 +300,10 @@ static void network_thread_main(void* unused) {
             fetch_market_data();
             fetch_balance();
         } else if (task == NET_TASK_TRADE_UP) {
-            execute_trade("UP");
+            execute_trade("UP", g_order_quantity);
             fetch_balance();
         } else if (task == NET_TASK_TRADE_DOWN) {
-            execute_trade("DOWN");
+            execute_trade("DOWN", g_order_quantity);
             fetch_balance();
         }
 
@@ -310,13 +313,18 @@ static void network_thread_main(void* unused) {
     }
 }
 
-static int queue_network_task(int task) {
+static int queue_network_task_with_quantity(int task, int quantity) {
     if (g_network_busy) return 0;
     g_network_complete = 0;
     g_network_task = task;
+    g_order_quantity = quantity;
     g_network_busy = 1;
     LightEvent_Signal(&g_network_request);
     return 1;
+}
+
+static int queue_network_task(int task) {
+    return queue_network_task_with_quantity(task, 1);
 }
 
 static int take_completed_task(void) {
@@ -392,6 +400,7 @@ int main(int argc, char* argv[]) {
     int buy_pressed_frame  = 0;
     int sell_pressed_frame = 0;
     int selected_action = 0;
+    int selected_quantity = 1;
     int connect_phase = 0;
 
     /* ---- Main loop ---- */
@@ -518,6 +527,7 @@ int main(int argc, char* argv[]) {
                 0,
                 0,
                 selected_action,
+                selected_quantity,
                 "QR SCAN",
                 scan_message
             );
@@ -602,22 +612,28 @@ int main(int argc, char* argv[]) {
             if (keys_down & (KEY_LEFT | KEY_RIGHT)) {
                 selected_action = 1 - selected_action;
             }
+            if ((keys_down & KEY_UP) &&
+                selected_quantity < TRADE_QUANTITY_MAX) {
+                selected_quantity++;
+            }
+            if ((keys_down & KEY_DOWN) &&
+                selected_quantity > TRADE_QUANTITY_MIN) {
+                selected_quantity--;
+            }
 
-            if (!g_network_busy && (keys_down & KEY_L)) {
-                selected_action = 0;
-                buy_pressed_frame = 1;
-                queue_network_task(NET_TASK_TRADE_UP);
-            } else if (!g_network_busy && (keys_down & KEY_R)) {
-                selected_action = 1;
-                sell_pressed_frame = 1;
-                queue_network_task(NET_TASK_TRADE_DOWN);
-            } else if (!g_network_busy && (keys_down & KEY_A)) {
+            if (!g_network_busy && (keys_down & KEY_A)) {
                 if (selected_action == 0) {
                     buy_pressed_frame = 1;
-                    queue_network_task(NET_TASK_TRADE_UP);
+                    queue_network_task_with_quantity(
+                        NET_TASK_TRADE_UP,
+                        selected_quantity
+                    );
                 } else {
                     sell_pressed_frame = 1;
-                    queue_network_task(NET_TASK_TRADE_DOWN);
+                    queue_network_task_with_quantity(
+                        NET_TASK_TRADE_DOWN,
+                        selected_quantity
+                    );
                 }
             } else if (!g_network_busy && (keys_down & KEY_X)) {
                 queue_network_task(NET_TASK_REFRESH);
@@ -631,20 +647,20 @@ int main(int argc, char* argv[]) {
                     selected_action = 0;
                     buy_pressed_frame = 1;
                     if (!g_network_busy && (keys_down & KEY_TOUCH)) {
-                        queue_network_task(NET_TASK_TRADE_UP);
+                        queue_network_task_with_quantity(
+                            NET_TASK_TRADE_UP,
+                            selected_quantity
+                        );
                     }
                 } else if (ui_touch_in_down(touch.px, touch.py)) {
                     selected_action = 1;
                     sell_pressed_frame = 1;
                     if (!g_network_busy && (keys_down & KEY_TOUCH)) {
-                        queue_network_task(NET_TASK_TRADE_DOWN);
+                        queue_network_task_with_quantity(
+                            NET_TASK_TRADE_DOWN,
+                            selected_quantity
+                        );
                     }
-                } else if (ui_touch_in_refresh(touch.px, touch.py)) {
-                    if (!g_network_busy && (keys_down & KEY_TOUCH)) {
-                        queue_network_task(NET_TASK_REFRESH);
-                    }
-                } else if (ui_touch_in_quit(touch.px, touch.py)) {
-                    if (keys_down & KEY_TOUCH) break;
                 }
             }
 
@@ -652,11 +668,25 @@ int main(int argc, char* argv[]) {
             MarketDisplay market_snapshot;
             TradeResult trade_snapshot;
             copy_ui_state(&market_snapshot, &trade_snapshot);
-            const char* activity = "";
+            char activity[48] = {0};
             if (g_network_busy) {
-                if (g_network_task == NET_TASK_REFRESH) activity = "Updating live data...";
-                else if (g_network_task == NET_TASK_TRADE_UP) activity = "Buying UP...";
-                else if (g_network_task == NET_TASK_TRADE_DOWN) activity = "Buying DOWN...";
+                if (g_network_task == NET_TASK_REFRESH) {
+                    snprintf(activity, sizeof(activity), "Updating live data...");
+                } else if (g_network_task == NET_TASK_TRADE_UP) {
+                    snprintf(
+                        activity,
+                        sizeof(activity),
+                        "Buying %d UP...",
+                        g_order_quantity
+                    );
+                } else if (g_network_task == NET_TASK_TRADE_DOWN) {
+                    snprintf(
+                        activity,
+                        sizeof(activity),
+                        "Buying %d DOWN...",
+                        g_order_quantity
+                    );
+                }
             }
 
             ui_begin_frame();
@@ -673,6 +703,7 @@ int main(int argc, char* argv[]) {
                 buy_pressed_frame,
                 sell_pressed_frame,
                 selected_action,
+                selected_quantity,
                 "TRADING",
                 activity
             );
@@ -707,6 +738,7 @@ int main(int argc, char* argv[]) {
                 0,
                 0,
                 selected_action,
+                selected_quantity,
                 "ERROR",
                 g_error_msg
             );

@@ -274,7 +274,8 @@ static void draw_action_button(
     float h,
     int pressed,
     int selected,
-    int is_up
+    int is_up,
+    int quantity
 ) {
     u32 soft = is_up ? COL_GREEN_SOFT : COL_CORAL_SOFT;
     u32 strong = is_up ? COL_GREEN : COL_CORAL;
@@ -287,9 +288,11 @@ static void draw_action_button(
     } else {
         draw_card(x, y, w, h, fill, strong);
     }
-    draw_text(is_up ? "BTC ABOVE" : "BTC BELOW", x + 14, y + 25, 0.40f, text);
-    draw_text(is_up ? "UP" : "DOWN", x + 14, y + 70, 0.90f, text);
-    draw_text("1 POSITION", x + 14, y + 94, 0.38f, text);
+    draw_text(is_up ? "BTC ABOVE" : "BTC BELOW", x + 14, y + 23, 0.40f, text);
+    draw_text(is_up ? "UP" : "DOWN", x + 14, y + 62, 0.82f, text);
+    char quantity_text[24];
+    snprintf(quantity_text, sizeof(quantity_text), "%d POSITION%s", quantity, quantity > 1 ? "S" : "");
+    draw_text(quantity_text, x + 14, y + 82, 0.36f, text);
     if (selected) {
         draw_pill(x + w - 40, y + 10, 28, 18, COL_BLUE);
         draw_text("A", x + w - 30, y + 23, 0.34f, COL_WHITE);
@@ -299,7 +302,7 @@ static void draw_action_button(
 static void draw_pairing_bottom(const char* message) {
     draw_text("Connect DeepDS", 18, 54, 0.72f, COL_INK);
     draw_text("Keep the full QR and white border visible.", 18, 80, 0.35f, COL_MUTED);
-    draw_text("QR CAMERA v1.2", 220, 54, 0.34f, COL_BLUE);
+    draw_text("QR CAMERA v1.3", 220, 54, 0.34f, COL_BLUE);
 
     draw_card(18, 98, 284, 75, COL_SURFACE, COL_BLUE);
     draw_rect(34, 114, 28, 3, COL_BLUE);
@@ -319,6 +322,7 @@ void ui_draw_bottom(
     int up_pressed,
     int down_pressed,
     int selected_action,
+    int quantity,
     const char* state_name,
     const char* message
 ) {
@@ -342,52 +346,46 @@ void ui_draw_bottom(
         return;
     }
 
-    draw_text("Choose the next move", 14, 50, 0.56f, COL_INK);
-    draw_text("< > FOCUS   A BUY   L UP   R DOWN", 14, 64, 0.34f, COL_MUTED);
+    draw_text("Build your order", 14, 49, 0.54f, COL_INK);
+    draw_text("< > SIDE   ^ v QTY   A BUY", 14, 63, 0.33f, COL_MUTED);
+    draw_text("X UPDATE   START EXIT", 168, 63, 0.30f, COL_MUTED);
+
+    draw_card(82, 72, 156, 25, COL_BLUE_SOFT, COL_BLUE);
+    draw_text("QUANTITY", 96, 90, 0.34f, COL_BLUE);
+    snprintf(buf, sizeof(buf), "%d", quantity);
+    draw_text(buf, 201, 91, 0.50f, COL_INK);
+
     draw_action_button(
         BTN_BUY_X, BTN_BUY_Y, BTN_BUY_W, BTN_BUY_H,
-        up_pressed, selected_action == 0, 1
+        up_pressed, selected_action == 0, 1, quantity
     );
     draw_action_button(
         BTN_SELL_X, BTN_SELL_Y, BTN_SELL_W, BTN_SELL_H,
-        down_pressed, selected_action == 1, 0
+        down_pressed, selected_action == 1, 0, quantity
     );
-
-    draw_card(
-        BTN_REFRESH_X,
-        BTN_REFRESH_Y,
-        BTN_REFRESH_W,
-        BTN_REFRESH_H,
-        COL_SURFACE,
-        COL_LINE
-    );
-    draw_text("X  REFRESH", BTN_REFRESH_X + 27, BTN_REFRESH_Y + 20, 0.36f, COL_BLUE);
-
-    draw_card(
-        BTN_QUIT_X,
-        BTN_QUIT_Y,
-        BTN_QUIT_W,
-        BTN_QUIT_H,
-        COL_SURFACE,
-        COL_LINE
-    );
-    draw_text("START  EXIT", BTN_QUIT_X + 29, BTN_QUIT_Y + 20, 0.34f, COL_MUTED);
 
     if (message && message[0]) {
-        draw_pill(26, 224, 268, 14, COL_BLUE);
-        draw_text(message, 50, 236, 0.34f, COL_WHITE);
+        draw_card(12, 201, 296, 31, COL_BLUE, COL_BLUE);
+        draw_text(message, 26, 222, 0.36f, COL_WHITE);
     } else if (last_trade && last_trade->show) {
         u32 fill = last_trade->success ? COL_GREEN : COL_CORAL;
-        draw_pill(26, 224, 268, 14, fill);
-        snprintf(
-            buf,
-            sizeof(buf),
-            "%.42s",
-            last_trade->message[0]
-                ? last_trade->message
-                : (last_trade->success ? "ORDER FILLED" : "ORDER FAILED")
-        );
-        draw_text(buf, 42, 236, 0.32f, COL_WHITE);
+        draw_card(12, 201, 296, 31, fill, fill);
+        if (last_trade->success && last_trade->action[0]) {
+            snprintf(
+                buf,
+                sizeof(buf),
+                "LAST: %d %s  /  %.36s",
+                last_trade->quantity,
+                last_trade->action,
+                last_trade->message
+            );
+        } else {
+            snprintf(buf, sizeof(buf), "%.44s", last_trade->message);
+        }
+        draw_text(buf, 23, 222, 0.34f, COL_WHITE);
+    } else {
+        draw_card(12, 201, 296, 31, COL_SURFACE, COL_LINE);
+        draw_text("No orders yet", 105, 222, 0.36f, COL_MUTED);
     }
 }
 
@@ -444,12 +442,4 @@ int ui_touch_in_buy(u16 tx, u16 ty) {
 
 int ui_touch_in_down(u16 tx, u16 ty) {
     return point_in_rect(tx, ty, BTN_SELL_X, BTN_SELL_Y, BTN_SELL_W, BTN_SELL_H);
-}
-
-int ui_touch_in_refresh(u16 tx, u16 ty) {
-    return point_in_rect(tx, ty, BTN_REFRESH_X, BTN_REFRESH_Y, BTN_REFRESH_W, BTN_REFRESH_H);
-}
-
-int ui_touch_in_quit(u16 tx, u16 ty) {
-    return point_in_rect(tx, ty, BTN_QUIT_X, BTN_QUIT_Y, BTN_QUIT_W, BTN_QUIT_H);
 }

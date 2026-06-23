@@ -34,6 +34,8 @@ export interface MarketDataResponse {
 export interface TradeResponse {
   ok: 0 | 1;
   digest?: string;
+  action?: 'UP' | 'DOWN';
+  quantity?: string;
   cost?: string;
   askPrice?: string;
   error?: string;

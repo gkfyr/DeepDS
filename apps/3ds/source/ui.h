@@ -33,24 +33,14 @@
 
 /* Large, thumb-friendly controls */
 #define BTN_BUY_X       12
-#define BTN_BUY_Y       72
+#define BTN_BUY_Y       105
 #define BTN_BUY_W       142
-#define BTN_BUY_H       100
+#define BTN_BUY_H       88
 
 #define BTN_SELL_X      166
-#define BTN_SELL_Y      72
+#define BTN_SELL_Y      105
 #define BTN_SELL_W      142
-#define BTN_SELL_H      100
-
-#define BTN_REFRESH_X   12
-#define BTN_REFRESH_Y   181
-#define BTN_REFRESH_W   142
-#define BTN_REFRESH_H   28
-
-#define BTN_QUIT_X      166
-#define BTN_QUIT_Y      181
-#define BTN_QUIT_W      142
-#define BTN_QUIT_H      28
+#define BTN_SELL_H      88
 
 typedef struct {
     float spot;
@@ -69,6 +59,8 @@ typedef struct {
 
 typedef struct {
     int success;
+    int quantity;
+    char action[8];
     char digest[24];
     char message[72];
     int show;
@@ -95,6 +87,7 @@ void ui_draw_bottom(
     int up_pressed,
     int down_pressed,
     int selected_action,
+    int quantity,
     const char* state_name,
     const char* message
 );
@@ -108,5 +101,3 @@ void ui_draw_loading(
 
 int ui_touch_in_buy(u16 tx, u16 ty);
 int ui_touch_in_down(u16 tx, u16 ty);
-int ui_touch_in_refresh(u16 tx, u16 ty);
-int ui_touch_in_quit(u16 tx, u16 ty);

@@ -59,7 +59,14 @@ router.post('/', async (req: Request, res: Response) => {
       console.log(
         `[dummy-trade] ${action} qty=${quantity} cost=${cost} remaining=${remaining} digest=${digest}`,
       );
-      res.json({ ok: 1, digest, mode: 'dummy', cost: cost.toString() });
+      res.json({
+        ok: 1,
+        digest,
+        mode: 'dummy',
+        action,
+        quantity: quantity.toString(),
+        cost: cost.toString(),
+      });
       return;
     }
 
@@ -93,11 +100,19 @@ router.post('/', async (req: Request, res: Response) => {
       event.type.endsWith('::predict::PositionMinted'),
     );
     const parsed = mintEvent?.parsedJson as
-      | { cost?: string | number; ask_price?: string | number }
+      | {
+          quantity?: string | number;
+          cost?: string | number;
+          ask_price?: string | number;
+        }
       | undefined;
     const response: TradeResponse = {
       ok: 1,
       digest: result.digest,
+      action,
+      quantity: parsed?.quantity !== undefined
+        ? String(parsed.quantity)
+        : quantity.toString(),
       cost: parsed?.cost !== undefined ? String(parsed.cost) : undefined,
       askPrice:
         parsed?.ask_price !== undefined ? String(parsed.ask_price) : undefined,
