@@ -49,31 +49,61 @@ trap cleanup EXIT INT TERM
 
 cd "$ROOT_DIR"
 
-if curl -fsS --max-time 2 "$LOCAL_URL/health" >/dev/null 2>&1; then
-  echo "Using the proxy already running at $LOCAL_URL"
-else
-  echo "Building the DeepDS proxy..."
-  "${PNPM[@]}" --filter @deepds/proxy build
+echo "Building the DeepDS proxy..."
+"${PNPM[@]}" --filter @deepds/proxy build
 
-  echo "Starting the DeepDS proxy on port $PORT..."
-  "${PNPM[@]}" --filter @deepds/proxy start &
-  PROXY_PID=$!
+EXISTING_PROXY_PID="$(
+  lsof -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null | head -n 1 || true
+)"
 
-  for _ in {1..30}; do
-    if curl -fsS --max-time 2 "$LOCAL_URL/health" >/dev/null 2>&1; then
-      break
-    fi
-    if ! kill -0 "$PROXY_PID" 2>/dev/null; then
-      echo "The proxy stopped before becoming ready."
-      exit 1
-    fi
-    sleep 1
-  done
-
-  if ! curl -fsS --max-time 2 "$LOCAL_URL/health" >/dev/null 2>&1; then
-    echo "The proxy did not become ready at $LOCAL_URL."
+if [[ -n "$EXISTING_PROXY_PID" ]]; then
+  EXISTING_COMMAND="$(ps -p "$EXISTING_PROXY_PID" -o command= 2>/dev/null || true)"
+  if [[ "$EXISTING_COMMAND" != *"node dist/index.js"* ]]; then
+    echo "Port $PORT is occupied by another process:"
+    echo "  PID $EXISTING_PROXY_PID: $EXISTING_COMMAND"
     exit 1
   fi
+
+  echo "Stopping the previous DeepDS proxy (PID $EXISTING_PROXY_PID)..."
+  kill "$EXISTING_PROXY_PID"
+  for _ in {1..20}; do
+    if ! kill -0 "$EXISTING_PROXY_PID" 2>/dev/null; then
+      break
+    fi
+    sleep 0.1
+  done
+  if kill -0 "$EXISTING_PROXY_PID" 2>/dev/null; then
+    echo "The previous proxy did not stop cleanly."
+    exit 1
+  fi
+fi
+
+while IFS= read -r tunnel_pid; do
+  [[ -z "$tunnel_pid" ]] && continue
+  echo "Stopping previous Cloudflare tunnel (PID $tunnel_pid)..."
+  kill "$tunnel_pid" 2>/dev/null || true
+done < <(
+  pgrep -f "cloudflared tunnel --url ${LOCAL_URL}" 2>/dev/null || true
+)
+
+echo "Starting the DeepDS proxy on port $PORT..."
+node "$ROOT_DIR/apps/proxy/dist/index.js" &
+PROXY_PID=$!
+
+for _ in {1..30}; do
+  if curl -fsS --max-time 2 "$LOCAL_URL/health" >/dev/null 2>&1; then
+    break
+  fi
+  if ! kill -0 "$PROXY_PID" 2>/dev/null; then
+    echo "The proxy stopped before becoming ready."
+    exit 1
+  fi
+  sleep 1
+done
+
+if ! curl -fsS --max-time 2 "$LOCAL_URL/health" >/dev/null 2>&1; then
+  echo "The proxy did not become ready at $LOCAL_URL."
+  exit 1
 fi
 
 echo

@@ -25,12 +25,9 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function isObjectVisibilityRace(error: unknown, objectId: string): boolean {
+function isObjectVisibilityRace(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return (
-    message.includes('"code":"notExists"') &&
-    message.toLowerCase().includes(objectId.toLowerCase())
-  );
+  return message.includes('"code":"notExists"');
 }
 
 async function waitForSharedObject(objectId: string): Promise<{
@@ -180,7 +177,7 @@ export async function createAndFundPredictManager(
     } catch (error) {
       if (
         attempt === DEPOSIT_SUBMIT_ATTEMPTS ||
-        !isObjectVisibilityRace(error, managerId)
+        !isObjectVisibilityRace(error)
       ) {
         throw error;
       }
