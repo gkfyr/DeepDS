@@ -95,6 +95,7 @@ export async function fetchActiveMarket(): Promise<MarketDataResponse> {
     const strike = Math.round(spot / 100) * 100;
     const up = Math.max(0.2, Math.min(0.8, 0.5 + (spot - strike) / 500));
     cachedMarket = {
+      marketName: 'BTC PRICE AT EXPIRY',
       spot: Number(spot.toFixed(2)),
       forward: Number(spot.toFixed(2)),
       strike,
@@ -158,6 +159,7 @@ export async function fetchActiveMarket(): Promise<MarketDataResponse> {
   ]);
 
   cachedMarket = {
+    marketName: `${oracle.underlying_asset.toUpperCase()} PRICE AT EXPIRY`,
     spot: spotRaw / PRICE_SCALE,
     forward: forwardRaw / PRICE_SCALE,
     strike: strikeRaw / PRICE_SCALE,

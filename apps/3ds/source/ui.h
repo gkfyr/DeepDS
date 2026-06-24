@@ -43,6 +43,7 @@
 #define BTN_SELL_H      176
 
 typedef struct {
+    char market_name[32];
     float spot;
     float forward;
     float strike;

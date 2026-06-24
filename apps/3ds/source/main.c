@@ -149,6 +149,9 @@ static void fetch_market_data(void) {
     LightLock_Unlock(&g_data_lock);
 
     char tmp[32];
+    if (!json_value(buf, "marketName", next.market_name, sizeof(next.market_name))) {
+        snprintf(next.market_name, sizeof(next.market_name), "BTC PRICE AT EXPIRY");
+    }
     if (json_value(buf, "spot", tmp, sizeof(tmp)))
         next.spot = (float)atof(tmp);
     if (json_value(buf, "forward", tmp, sizeof(tmp)))

@@ -18,6 +18,7 @@ export interface TradeRequest {
 }
 
 export interface MarketDataResponse {
+  marketName: string;
   spot: number;
   forward: number;
   strike: number;

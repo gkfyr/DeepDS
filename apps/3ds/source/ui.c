@@ -203,7 +203,13 @@ void ui_draw_top(
         return;
     }
 
-    draw_text("BTC  /  LIVE ORACLE", 16, 53, 0.40f, COL_BLUE);
+    draw_text(
+        market->market_name[0] ? market->market_name : "BTC PRICE AT EXPIRY",
+        16,
+        53,
+        0.40f,
+        COL_BLUE
+    );
     snprintf(buf, sizeof(buf), "$%.2f", market->spot);
     draw_text(buf, 16, 88, 0.86f, COL_INK);
 
@@ -293,8 +299,6 @@ static void draw_action_button(
     char quantity_text[24];
     snprintf(quantity_text, sizeof(quantity_text), "%d POSITION%s", quantity, quantity > 1 ? "S" : "");
     draw_text(quantity_text, x + 16, y + 120, 0.40f, text);
-    draw_text("^ v adjusts qty", x + 16, y + 150, 0.31f, text);
-    draw_text("A buys selected", x + 16, y + 168, 0.31f, text);
     if (selected) {
         draw_pill(x + w - 44, y + 12, 32, 21, COL_BLUE);
         draw_text("A", x + w - 32, y + 27, 0.38f, COL_WHITE);
