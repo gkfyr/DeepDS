@@ -150,7 +150,7 @@ static void fetch_market_data(void) {
 
     char tmp[32];
     if (!json_value(buf, "marketName", next.market_name, sizeof(next.market_name))) {
-        snprintf(next.market_name, sizeof(next.market_name), "BTC PRICE AT EXPIRY");
+        snprintf(next.market_name, sizeof(next.market_name), "BTC 15 MIN MARKET");
     }
     if (json_value(buf, "spot", tmp, sizeof(tmp)))
         next.spot = (float)atof(tmp);

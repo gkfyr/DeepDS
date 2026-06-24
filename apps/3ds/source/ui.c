@@ -204,7 +204,7 @@ void ui_draw_top(
     }
 
     draw_text(
-        market->market_name[0] ? market->market_name : "BTC PRICE AT EXPIRY",
+        market->market_name[0] ? market->market_name : "BTC 15 MIN MARKET",
         16,
         53,
         0.40f,

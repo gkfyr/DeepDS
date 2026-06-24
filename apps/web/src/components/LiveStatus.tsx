@@ -7,6 +7,7 @@ import {
   type BalanceData,
   type MarketData,
 } from '../lib/proxy';
+import { CopyValue } from './CopyValue';
 
 interface LiveStatusProps {
   sid: string;
@@ -68,7 +69,7 @@ export function LiveStatus({ sid, ephemeralAddress, proxyUrl }: LiveStatusProps)
         <div className="flex items-center justify-between border-b border-[#23445c] pb-4">
           <div>
             <div className="font-mono text-[9px] uppercase tracking-[0.15em] text-[#74b8e7]">
-              BTC spot
+              {market?.marketName ?? 'BTC 15 MIN MARKET'}
             </div>
             <div className="mt-1 font-mono text-2xl">
               {market ? `$${market.spot.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '—'}
@@ -121,11 +122,8 @@ export function LiveStatus({ sid, ephemeralAddress, proxyUrl }: LiveStatusProps)
         </div>
       </div>
 
-      <div className="mt-4 rounded-[16px] bg-ds-blue-pale p-4">
-        <div className="data-label">Ephemeral wallet</div>
-        <div className="mt-2 break-all font-mono text-[10px] leading-5 text-ds-muted">
-          {ephemeralAddress}
-        </div>
+      <div className="mt-4 overflow-hidden rounded-[16px] border border-ds-line bg-ds-blue-pale/60">
+        <CopyValue label="Ephemeral wallet" value={ephemeralAddress} />
       </div>
 
       <div className="mt-3 text-right font-mono text-[9px] uppercase tracking-[0.12em] text-ds-muted">

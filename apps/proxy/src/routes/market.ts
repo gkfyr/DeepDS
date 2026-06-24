@@ -14,6 +14,13 @@ const router = Router();
 const PREDICT_SERVER =
   process.env.PREDICT_SERVER_URL ?? 'https://predict-server.testnet.mystenlabs.com';
 const PRICE_SCALE = 1e9;
+const MARKET_INTERVAL_MINUTES = Number(
+  process.env.PREDICT_MARKET_INTERVAL_MINUTES ?? 15,
+);
+
+function marketName(asset: string): string {
+  return `${asset.toUpperCase()} ${MARKET_INTERVAL_MINUTES} MIN MARKET`;
+}
 
 interface OracleInfo {
   oracle_id: string;
@@ -95,7 +102,7 @@ export async function fetchActiveMarket(): Promise<MarketDataResponse> {
     const strike = Math.round(spot / 100) * 100;
     const up = Math.max(0.2, Math.min(0.8, 0.5 + (spot - strike) / 500));
     cachedMarket = {
-      marketName: 'BTC PRICE AT EXPIRY',
+      marketName: marketName('BTC'),
       spot: Number(spot.toFixed(2)),
       forward: Number(spot.toFixed(2)),
       strike,
@@ -159,7 +166,7 @@ export async function fetchActiveMarket(): Promise<MarketDataResponse> {
   ]);
 
   cachedMarket = {
-    marketName: `${oracle.underlying_asset.toUpperCase()} PRICE AT EXPIRY`,
+    marketName: marketName(oracle.underlying_asset),
     spot: spotRaw / PRICE_SCALE,
     forward: forwardRaw / PRICE_SCALE,
     strike: strikeRaw / PRICE_SCALE,

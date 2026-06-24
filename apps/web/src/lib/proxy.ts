@@ -15,6 +15,7 @@ export interface SessionPayload {
 }
 
 export interface MarketData {
+  marketName: string;
   spot: number;
   strike: number;
   up: number;

@@ -1,6 +1,7 @@
 'use client';
 
 import { QRCodeSVG } from 'qrcode.react';
+import { CopyValue } from './CopyValue';
 
 interface SessionQRProps {
   sid: string;
@@ -57,19 +58,9 @@ export function SessionQR({ sid, proxyUrl }: SessionQRProps) {
         </div>
       </div>
 
-      <div className="mt-6 w-full divide-y divide-ds-line rounded-[18px] border border-ds-line text-left">
-        <div className="px-4 py-3">
-          <span className="data-label">Session</span>
-          <span className="mt-2 block break-all font-mono text-[11px] leading-5 text-ds-ink">
-            {sid}
-          </span>
-        </div>
-        <div className="flex items-center justify-between gap-4 px-4 py-3">
-          <span className="data-label">Proxy</span>
-          <span className="max-w-[210px] truncate font-mono text-[11px] text-ds-ink">
-            {consoleProxyUrl}
-          </span>
-        </div>
+      <div className="mt-6 w-full divide-y divide-ds-line overflow-hidden rounded-[18px] border border-ds-line bg-ds-blue-pale/40 text-left">
+        <CopyValue label="Session UUID" value={sid} />
+        <CopyValue label="3DS proxy URL" value={consoleProxyUrl} />
       </div>
 
       <div className="mt-4 max-w-sm rounded-[14px] bg-ds-blue-pale px-4 py-3 text-left text-xs leading-5 text-ds-muted">
