@@ -9,7 +9,7 @@
  * Sessions are created by the web frontend and stored in memory.
  * The 3DS only needs a session ID (scanned from QR code) to trade.
  *
- * Port: 3001 (HTTP — 3DS does not support modern TLS)
+ * Port: 3001 (HTTP for LAN; HTTPS is handled by deployed/tunnel frontends)
  */
 
 import app from './app.js';

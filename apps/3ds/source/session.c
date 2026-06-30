@@ -29,21 +29,6 @@ int session_set(const char* url, const char* sid) {
         g_session.url[--url_len] = '\0';
     }
 
-    /*
-     * Nintendo's original SSL service tops out at TLS 1.1. Quick Tunnel HTTP
-     * is intentionally used as the compatibility edge; cloudflared encrypts
-     * the hop from Cloudflare to the local proxy.
-     */
-    if (strncmp(g_session.url, "https://", 8) == 0 &&
-        strstr(g_session.url, ".trycloudflare.com") != NULL) {
-        memmove(
-            g_session.url + 7,
-            g_session.url + 8,
-            strlen(g_session.url + 8) + 1
-        );
-        memcpy(g_session.url, "http://", 7);
-    }
-
     g_session.is_valid = 1;
     return 1;
 }

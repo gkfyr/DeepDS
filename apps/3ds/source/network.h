@@ -2,9 +2,9 @@
  * network.h — HTTP client wrappers for 3DS httpc service
  *
  * IMPORTANT: 3DS constraints:
- * - Plain HTTP is required for original-model 3DS compatibility
- * - The system SSL service only supports TLS 1.1; modern Vercel TLS cannot
- *   be reached directly
+ * - Plain HTTP is still supported for LAN/local proxy development
+ * - HTTPS uses mbedTLS instead of the 3DS system SSL service, allowing TLS 1.2
+ *   connections to modern hosts
  * - No WebSockets
  * - Small response buffers (3DS has ~128MB RAM but httpc buffers are limited)
  * - Simple flat JSON responses only
@@ -49,7 +49,8 @@ int network_init(void);
 void network_exit(void);
 
 /**
- * Last libctru Result produced by the HTTP layer, or 0 after a completed HTTP
- * response. Useful for displaying TLS/transport failures on-device.
+ * Last transport Result/error produced by the HTTP layer, or 0 after a
+ * completed HTTP response. Useful for displaying TLS/transport failures
+ * on-device.
  */
 unsigned int network_last_result(void);
