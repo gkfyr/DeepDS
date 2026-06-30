@@ -1,3 +1,0 @@
-{
-  "onlyBuiltDependencies": ["esbuild", "@next/swc-win32-x64-msvc", "next"]
-}
