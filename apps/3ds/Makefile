@@ -34,10 +34,10 @@ CXXFLAGS := $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
 
 ASFLAGS := -g $(ARCH)
 
-# Link flags — link against libctru and citro2d/citro3d
+# Link flags — link against libctru, citro2d/citro3d, and mbedTLS.
 LDFLAGS = -specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-LIBS     := -lcitro2d -lcitro3d -lctru -lm
+LIBS     := -lmbedtls -lmbedx509 -lmbedcrypto -lz -lcitro2d -lcitro3d -lctru -lm
 
 #---------------------------------------------------------------------------------
 # Source files

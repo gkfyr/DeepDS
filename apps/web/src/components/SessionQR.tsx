@@ -10,18 +10,11 @@ interface SessionQRProps {
 
 export function SessionQR({ sid, proxyUrl }: SessionQRProps) {
   /*
-   * The original 3DS SSL service only supports up to TLS 1.1, while Vercel
-   * requires TLS 1.2+. Cloudflare Quick Tunnels still accept plain HTTP and
-   * forward it to the local proxy, so the browser uses the HTTPS tunnel URL
-   * while the console receives its HTTP equivalent.
+   * The 3DS app uses mbedTLS for HTTPS, while this override keeps LAN or
+   * debugging endpoints easy to test when needed.
    */
   const configured3dsUrl = process.env.NEXT_PUBLIC_3DS_PROXY_URL?.trim();
-  const consoleProxyUrl =
-    configured3dsUrl ||
-    (proxyUrl.startsWith('https://') &&
-    proxyUrl.includes('.trycloudflare.com')
-      ? `http://${proxyUrl.slice('https://'.length)}`
-      : proxyUrl);
+  const consoleProxyUrl = configured3dsUrl || proxyUrl;
 
   /*
    * Compact wire format for the 3DS camera:
@@ -65,8 +58,8 @@ export function SessionQR({ sid, proxyUrl }: SessionQRProps) {
 
       <div className="mt-4 max-w-sm rounded-[14px] bg-ds-blue-pale px-4 py-3 text-left text-xs leading-5 text-ds-muted">
         <strong className="text-ds-ink">On your 3DS:</strong> open DeepDS and
-        point the outer camera at this code. Legacy HTTP is selected
-        automatically for Cloudflare Tunnel addresses.
+        point the outer camera at this code. HTTPS and local HTTP proxy
+        addresses are both supported.
       </div>
     </div>
   );

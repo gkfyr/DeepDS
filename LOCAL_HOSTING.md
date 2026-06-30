@@ -31,10 +31,8 @@ Keep that terminal and the Mac awake during the demo.
 ## Connect the Vercel frontend
 
 On the DeepDS session page, paste the generated HTTPS URL into **Server
-address** before creating a session. The web browser uses HTTPS, while DeepDS
-automatically converts a `trycloudflare.com` address to HTTP inside the QR
-code. This matters because the original Nintendo 3DS system SSL service only
-supports TLS 1.1, while Vercel requires TLS 1.2 or newer.
+address** before creating a session. The 3DS app uses mbedTLS for HTTPS, so it
+can connect to modern TLS 1.2 hosts directly.
 
 Alternatively, set this value in Vercel and redeploy:
 
@@ -42,11 +40,11 @@ Alternatively, set this value in Vercel and redeploy:
 NEXT_PUBLIC_PROXY_URL=https://example-words.trycloudflare.com
 ```
 
-If you use another legacy-compatible relay hostname, set a separate address
-for the QR code:
+If you want the browser to use a public tunnel while the 3DS talks to a LAN
+address for debugging, set a separate address for the QR code:
 
 ```env
-NEXT_PUBLIC_3DS_PROXY_URL=http://relay.example.com
+NEXT_PUBLIC_3DS_PROXY_URL=http://192.168.1.5:3001
 ```
 
 ## Verify

@@ -5,7 +5,7 @@ DeepDS turns a Nintendo 3DS into a physical BTC prediction terminal for the Sui 
 [![Watch on YouTube](https://img.youtube.com/vi/Xie-nVBO11o/hqdefault.jpg)](https://youtu.be/Xie-nVBO11o)
 [![Watch on YouTube](https://img.youtube.com/vi/9Y_k8kW2xns/hqdefault.jpg)](https://youtube.com/shorts/9Y_k8kW2xns)
 
-The browser creates an allowance-limited ephemeral wallet, the proxy creates a `PredictManager` owned by that wallet, and the 3DS submits simple `UP` or `DOWN` commands over local HTTP. Private keys and Sui transaction building never run on the 3DS.
+The browser creates an allowance-limited ephemeral wallet, the proxy creates a `PredictManager` owned by that wallet, and the 3DS submits simple `UP` or `DOWN` commands over HTTP or HTTPS. Private keys and Sui transaction building never run on the 3DS.
 
 ## Architecture
 
@@ -21,7 +21,7 @@ Node.js proxy
   ├─ reads active BTC oracles from predict-server
   └─ signs predict::mint<dUSDC> for UP/DOWN commands
              ▲
-             │ plain HTTP on the local network
+             │ HTTP on LAN or HTTPS over mbedTLS
 Nintendo 3DS
   ├─ scans or manually enters the session
   ├─ displays BTC spot, ATM strike, expiry, and balances
@@ -35,7 +35,7 @@ The session can only spend the SUI and dUSDC explicitly transferred to its ephem
 - Node.js 20+
 - pnpm 9+
 - A Sui testnet wallet with SUI and hackathon dUSDC
-- For the 3DS build: devkitPro, devkitARM, libctru, citro2d, and citro3d
+- For the 3DS build: devkitPro, devkitARM, libctru, citro2d, citro3d, and `3ds-mbedtls`
 
 The Predict deployment currently configured by default is:
 
@@ -58,7 +58,7 @@ cp apps/web/.env.local.example apps/web/.env.local
 pnpm dev:web
 ```
 
-Open `http://localhost:3000`, connect a testnet wallet, choose a dUSDC session allowance, and create the session. For a real 3DS, set the proxy URL in the web UI to the computer's LAN address, such as `http://192.168.1.5:3001`.
+Open `http://localhost:3000`, connect a testnet wallet, choose a dUSDC session allowance, and create the session. For a real 3DS, set the proxy URL in the web UI to either the computer's LAN address, such as `http://192.168.1.5:3001`, or a public HTTPS proxy URL.
 
 ## Deploy
 
@@ -97,6 +97,7 @@ curl -X POST http://localhost:3001/api/trade \
 ## Build the 3DS app
 
 ```bash
+sudo dkp-pacman -S 3ds-mbedtls
 cd apps/3ds
 make
 ```
@@ -117,10 +118,10 @@ Open the pairing page in the web app, then point the 3DS outer camera at its QR 
 
 ## Security notes
 
-- Run the proxy only on a trusted local network.
+- Prefer HTTPS for public proxy URLs. Plain HTTP is intended for trusted local networks.
 - Use a small dUSDC allowance suitable for the demo.
 - Sessions expire after one hour and disappear when the proxy restarts.
-- The current PoC sends the ephemeral private key from the browser to the local proxy over HTTP because Nintendo 3DS TLS support is constrained. Do not expose the proxy to the public internet.
+- The current PoC sends the ephemeral private key from the browser to the proxy during session setup. Keep the proxy private unless you have hardened deployment, monitoring, and session storage.
 
 ## References
 
